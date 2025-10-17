@@ -82,7 +82,8 @@ func NilOrEmpty(value *string) bool {
 // to their string representations. Fields with the `omitempty` tag will be omitted if empty.
 //
 // Note: This does NOT recursively flatten nested structs or handle slices/maps other than basic stringification.
-//       Use only for flat structs intended for query encoding.
+//
+//	Use only for flat structs intended for query encoding.
 func mapper(s any) (map[string]string, error) {
 	b, err := json.Marshal(s)
 	if err != nil {
