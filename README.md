@@ -1,16 +1,19 @@
-# gokeycloak
+# Keycloak: Idiomatic Go Client for Keycloak Admin API
 
 [![Go Reference](https://pkg.go.dev/badge/go.companyinfo.dev/keycloak.svg)](https://pkg.go.dev/go.companyinfo.dev/keycloak)
 [![Go Report Card](https://goreportcard.com/badge/go.companyinfo.dev/keycloak)](https://goreportcard.com/report/go.companyinfo.dev/keycloak)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-blue)](https://go.dev/dl/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 A production-ready, idiomatic Go client for the Keycloak Admin API.
 
+**Quick Links**: [Installation](#installation) | [Quick Start](#quick-start) | [Examples](examples/) | [API Docs](https://pkg.go.dev/go.companyinfo.dev/keycloak)
+
 ## Overview
 
-GoKeycloak provides a clean, type-safe interface for interacting with Keycloak's Admin API. Built for production use, it handles authentication, automatic token refresh, retry logic, and provides comprehensive resource management capabilities.
+The package provides a clean, type-safe interface for interacting with Keycloak's Admin API. Built for production use, it handles authentication, automatic token refresh, retry logic, and provides comprehensive resource management capabilities.
 
-**Why GoKeycloak?**
+**Why This Library?**
 
 - **Production Ready**: Battle-tested with automatic token management, retry logic, and comprehensive error handling
 - **Type Safe**: Strongly typed models prevent runtime errors and improve code maintainability
@@ -52,17 +55,30 @@ GoKeycloak provides a clean, type-safe interface for interacting with Keycloak's
 ## Requirements
 
 - **Go**: 1.24 or later
-- **Keycloak**: 26.x or later
+- **Keycloak**: 26.x or later (may work with earlier versions but not officially tested)
 - **Client Credentials**: A Keycloak client with appropriate permissions:
   - Service accounts enabled
+  - Client authentication: ON (confidential client)
   - At minimum: `view-users`, `manage-users`, `manage-groups` roles
   - For full admin operations: `realm-admin` role
+
+> **💡 Tip**: Check [Keycloak Client Setup](#setting-up-keycloak-for-integration-tests) for detailed configuration steps.
 
 ## Installation
 
 ```bash
 go get go.companyinfo.dev/keycloak
 ```
+
+The package name is `keycloak`, so you'll use it as:
+
+```go
+import "go.companyinfo.dev/keycloak"
+
+client, err := keycloak.New(ctx, keycloak.Config{...})
+```
+
+> **📝 Note**: Some examples in the wild may use `gokeycloak` as an import alias, but it's not necessary. The package name is `keycloak`.
 
 ## Quick Start
 
@@ -84,14 +100,14 @@ func main() {
     ctx := context.Background()
     
     // 1. Create client with production-ready defaults
-    client, err := gokeycloak.New(ctx, gokeycloak.Config{
+    client, err := keycloak.New(ctx, keycloak.Config{
         URL:          "https://keycloak.example.com",
         Realm:        "my-realm",
         ClientID:     "admin-cli",
         ClientSecret: "your-client-secret",
     },
-        gokeycloak.WithTimeout(30*time.Second),                    // Prevent hanging
-        gokeycloak.WithRetry(3, 1*time.Second, 10*time.Second),   // Handle transient failures
+        keycloak.WithTimeout(30*time.Second),                    // Prevent hanging
+        keycloak.WithRetry(3, 1*time.Second, 10*time.Second),   // Handle transient failures
     )
     if err != nil {
         log.Fatalf("Failed to initialize client: %v", err)
@@ -137,14 +153,14 @@ import (
 func main() {
     ctx := context.Background()
     
-    config := gokeycloak.Config{
+    config := keycloak.Config{
         URL:          "https://keycloak.example.com",
         Realm:        "my-realm",
         ClientID:     "admin-cli",
         ClientSecret: "your-client-secret",
     }
     
-    client, err := gokeycloak.New(ctx, config)
+    client, err := keycloak.New(ctx, config)
     if err != nil {
         log.Fatalf("Failed to create client: %v", err)
     }
@@ -171,20 +187,20 @@ import (
 func main() {
     ctx := context.Background()
     
-    config := gokeycloak.Config{
+    config := keycloak.Config{
         URL:          "https://keycloak.example.com",
         Realm:        "my-realm",
         ClientID:     "admin-cli",
         ClientSecret: "your-client-secret",
     }
     
-    client, err := gokeycloak.New(ctx, config,
-        gokeycloak.WithPageSize(100),                                  // Custom page size
-        gokeycloak.WithTimeout(30*time.Second),                        // Request timeout
-        gokeycloak.WithRetry(3, 5*time.Second, 30*time.Second),       // Retry configuration
-        gokeycloak.WithDebug(true),                                    // Enable debug logging
-        gokeycloak.WithUserAgent("my-app/1.0"),                        // Custom User-Agent
-        gokeycloak.WithHeaders(map[string]string{                      // Custom headers
+    client, err := keycloak.New(ctx, config,
+        keycloak.WithPageSize(100),                                  // Custom page size
+        keycloak.WithTimeout(30*time.Second),                        // Request timeout
+        keycloak.WithRetry(3, 5*time.Second, 30*time.Second),       // Retry configuration
+        keycloak.WithDebug(true),                                    // Enable debug logging
+        keycloak.WithUserAgent("my-app/1.0"),                        // Custom User-Agent
+        keycloak.WithHeaders(map[string]string{                      // Custom headers
             "X-Request-ID": "12345",
         }),
     )
@@ -263,7 +279,7 @@ log.Printf("Total groups: %d", count)
 
 ```go
 // Get group by specific attribute
-attribute := &gokeycloak.GroupAttribute{
+attribute := &keycloak.GroupAttribute{
     Key:   "salesforceID",
     Value: "SF-12345",
 }
@@ -332,16 +348,16 @@ if err != nil {
 
 ```go
 // Sync departments from your HR system to Keycloak
-func syncDepartments(ctx context.Context, client *gokeycloak.Client, departments []Department) error {
+func syncDepartments(ctx context.Context, client *keycloak.Client, departments []Department) error {
     for _, dept := range departments {
         // Try to find existing group by external ID
-        attr := &gokeycloak.GroupAttribute{
+        attr := &keycloak.GroupAttribute{
             Key:   "externalID",
             Value: dept.ExternalID,
         }
         
         group, err := client.Groups.GetByAttribute(ctx, attr)
-        if err == gokeycloak.ErrGroupNotFound {
+        if err == keycloak.ErrGroupNotFound {
             // Create new group
             attributes := map[string][]string{
                 "externalID":  {dept.ExternalID},
@@ -375,7 +391,7 @@ func syncDepartments(ctx context.Context, client *gokeycloak.Client, departments
 
 ```go
 // Create multiple groups with rollback on failure
-func createOrganizationStructure(ctx context.Context, client *gokeycloak.Client) error {
+func createOrganizationStructure(ctx context.Context, client *keycloak.Client) error {
     var createdGroups []string
     defer func() {
         if err := recover(); err != nil {
@@ -420,7 +436,7 @@ func createOrganizationStructure(ctx context.Context, client *gokeycloak.Client)
 
 ```go
 // Graceful shutdown with context cancellation
-func processGroupsWithCancellation(ctx context.Context, client *gokeycloak.Client) error {
+func processGroupsWithCancellation(ctx context.Context, client *keycloak.Client) error {
     // Create a context with timeout
     ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
     defer cancel()
@@ -455,8 +471,18 @@ func processGroupsWithCancellation(ctx context.Context, client *gokeycloak.Clien
             
             // Process this batch
             for _, group := range groups {
-                if err := processGroup(ctx, client, group); err != nil {
-                    return err
+                // Process each group - your custom logic here
+                log.Printf("Processing group: %s", *group.Name)
+                
+                // Example: Update group attributes
+                if group.Attributes == nil {
+                    attrs := make(map[string][]string)
+                    group.Attributes = &attrs
+                }
+                (*group.Attributes)["processed"] = []string{time.Now().Format(time.RFC3339)}
+                
+                if err := client.Groups.Update(ctx, *group); err != nil {
+                    return fmt.Errorf("failed to update group %s: %w", *group.ID, err)
                 }
             }
             
@@ -473,20 +499,20 @@ func processGroupsWithCancellation(ctx context.Context, client *gokeycloak.Clien
 ```go
 // Service struct for dependency injection
 type KeycloakService struct {
-    client *gokeycloak.Client
+    client *keycloak.Client
     logger *slog.Logger
 }
 
 func NewKeycloakService(ctx context.Context, cfg Config, logger *slog.Logger) (*KeycloakService, error) {
-    client, err := gokeycloak.New(ctx, gokeycloak.Config{
+    client, err := keycloak.New(ctx, keycloak.Config{
         URL:          cfg.KeycloakURL,
         Realm:        cfg.Realm,
         ClientID:     cfg.ClientID,
         ClientSecret: cfg.ClientSecret,
     },
-        gokeycloak.WithTimeout(30*time.Second),
-        gokeycloak.WithRetry(3, 1*time.Second, 10*time.Second),
-        gokeycloak.WithUserAgent(fmt.Sprintf("myapp/%s", cfg.Version)),
+        keycloak.WithTimeout(30*time.Second),
+        keycloak.WithRetry(3, 1*time.Second, 10*time.Second),
+        keycloak.WithUserAgent(fmt.Sprintf("myapp/%s", cfg.Version)),
     )
     if err != nil {
         return nil, fmt.Errorf("initialize keycloak client: %w", err)
@@ -498,12 +524,13 @@ func NewKeycloakService(ctx context.Context, cfg Config, logger *slog.Logger) (*
     }, nil
 }
 
-func (s *KeycloakService) GetOrCreateGroup(ctx context.Context, name string) (*gokeycloak.Group, error) {
+func (s *KeycloakService) GetOrCreateGroup(ctx context.Context, name string) (*keycloak.Group, error) {
     s.logger.InfoContext(ctx, "looking up group", "name", name)
     
     // Try to find by name
     groups, err := s.client.Groups.List(ctx, &name, false)
     if err != nil {
+        s.logger.ErrorContext(ctx, "failed to search groups", "error", err)
         return nil, fmt.Errorf("search groups: %w", err)
     }
     
@@ -517,6 +544,7 @@ func (s *KeycloakService) GetOrCreateGroup(ctx context.Context, name string) (*g
     // Create if not found
     groupID, err := s.client.Groups.Create(ctx, name, nil)
     if err != nil {
+        s.logger.ErrorContext(ctx, "failed to create group", "name", name, "error", err)
         return nil, fmt.Errorf("create group: %w", err)
     }
     
@@ -631,11 +659,15 @@ The package uses standard Go error handling with sentinel errors for common case
 
 ### Sentinel Errors
 
+The library provides typed errors for common scenarios:
+
+- `keycloak.ErrGroupNotFound` - Group not found in search or lookup operations
+
 ```go
 import "go.companyinfo.dev/keycloak"
 
 group, err := client.Groups.GetByAttribute(ctx, attribute)
-if err == gokeycloak.ErrGroupNotFound {
+if err == keycloak.ErrGroupNotFound {
     log.Println("Group not found")
 } else if err != nil {
     log.Fatalf("Unexpected error: %v", err)
@@ -699,16 +731,18 @@ ctx := context.Background()
 
 ```go
 // ✅ Good: Handles transient failures
-client, err := gokeycloak.New(ctx, config,
-    gokeycloak.WithRetry(3, 1*time.Second, 10*time.Second),
-    gokeycloak.WithTimeout(30*time.Second),
+client, err := keycloak.New(ctx, config,
+    keycloak.WithRetry(3, 1*time.Second, 10*time.Second),
+    keycloak.WithTimeout(30*time.Second),
 )
 
 // ❌ Bad: No retry, fails on first network hiccup
-client, err := gokeycloak.New(ctx, config)
+client, err := keycloak.New(ctx, config)
 ```
 
 ### 3. Use Pagination for Large Datasets
+
+> **⚠️ Warning**: Loading all groups at once can cause memory issues and timeouts in large Keycloak installations.
 
 ```go
 // ✅ Good: Memory efficient, handles any size
@@ -729,9 +763,11 @@ groups, err := client.Groups.List(ctx, nil, false)
 
 ### 4. Store Secrets Securely
 
+> **🔒 Security**: Never commit credentials to version control. Use environment variables or secret management services.
+
 ```go
 // ✅ Good: Load from environment or secret manager
-config := gokeycloak.Config{
+config := keycloak.Config{
     URL:          os.Getenv("KEYCLOAK_URL"),
     Realm:        os.Getenv("KEYCLOAK_REALM"),
     ClientID:     os.Getenv("KEYCLOAK_CLIENT_ID"),
@@ -739,21 +775,33 @@ config := gokeycloak.Config{
 }
 
 // ❌ Bad: Hardcoded credentials
-config := gokeycloak.Config{
+config := keycloak.Config{
     ClientSecret: "my-secret-12345", // Never do this!
 }
 ```
 
 ### 5. Use Structured Logging
 
+> **💡 Best Practice**: Use structured logging (like `slog`) for better observability and easier debugging.
+
 ```go
+import "log/slog"
+
 // ✅ Good: Structured logs with context
 logger.InfoContext(ctx, "creating group",
-    "name", groupName,
-    "attributes", attributes,
+    slog.String("name", groupName),
+    slog.String("operation", "group.create"),
+    slog.Any("attributes", attributes),
 )
 
-// ❌ Bad: Unstructured logs
+if err != nil {
+    logger.ErrorContext(ctx, "failed to create group",
+        slog.String("name", groupName),
+        slog.String("error", err.Error()),
+    )
+}
+
+// ❌ Bad: Unstructured logs (harder to parse and search)
 log.Printf("Creating group %s with attributes %v", groupName, attributes)
 ```
 
@@ -761,7 +809,7 @@ log.Printf("Creating group %s with attributes %v", groupName, attributes)
 
 ```go
 // ✅ Good: Check before create
-func ensureGroupExists(ctx context.Context, client *gokeycloak.Client, name string) (string, error) {
+func ensureGroupExists(ctx context.Context, client *keycloak.Client, name string) (string, error) {
     // Try to find existing
     groups, err := client.Groups.List(ctx, &name, false)
     if err != nil {
@@ -783,8 +831,8 @@ func ensureGroupExists(ctx context.Context, client *gokeycloak.Client, name stri
 
 ```go
 // ✅ Good: Add tracing headers
-client, err := gokeycloak.New(ctx, config,
-    gokeycloak.WithHeaders(map[string]string{
+client, err := keycloak.New(ctx, config,
+    keycloak.WithHeaders(map[string]string{
         "X-Request-ID": generateRequestID(),
         "X-Service":    "my-service",
     }),
@@ -797,7 +845,7 @@ client, err := gokeycloak.New(ctx, config,
 // ✅ Good: Use interface for testing
 type GroupManager interface {
     Create(ctx context.Context, name string, attrs map[string][]string) (string, error)
-    Get(ctx context.Context, id string) (*gokeycloak.Group, error)
+    Get(ctx context.Context, id string) (*keycloak.Group, error)
 }
 
 // Your service depends on interface, not concrete implementation
@@ -863,8 +911,8 @@ type MyService struct {
 2. **Configure client timeout**:
 
    ```go
-   client, err := gokeycloak.New(ctx, config,
-       gokeycloak.WithTimeout(30*time.Second),
+   client, err := keycloak.New(ctx, config,
+       keycloak.WithTimeout(30*time.Second),
    )
    ```
 
@@ -878,33 +926,63 @@ type MyService struct {
 
 **Problem**: `x509: certificate signed by unknown authority`
 
+> **🔒 Security Warning**: Never use `InsecureSkipVerify` in production. It disables certificate validation and makes you vulnerable to man-in-the-middle attacks.
+
 **Solutions**:
 
 1. **For development only** - Skip verification (NOT FOR PRODUCTION):
 
    ```go
+   import (
+       "crypto/tls"
+       "net/http"
+   )
+   
    httpClient := &http.Client{
        Transport: &http.Transport{
-           TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+           TLSClientConfig: &tls.Config{
+               InsecureSkipVerify: true, // ⚠️ NEVER in production!
+           },
        },
    }
-   client, err := gokeycloak.New(ctx, config,
-       gokeycloak.WithHTTPClient(httpClient),
+   client, err := keycloak.New(ctx, config,
+       keycloak.WithHTTPClient(httpClient),
    )
    ```
 
 2. **For production** - Add CA certificate:
 
    ```go
-   caCert, _ := os.ReadFile("/path/to/ca.crt")
+   import (
+       "crypto/tls"
+       "crypto/x509"
+       "net/http"
+       "os"
+   )
+   
+   caCert, err := os.ReadFile("/path/to/ca.crt")
+   if err != nil {
+       return err
+   }
+   
    caCertPool := x509.NewCertPool()
-   caCertPool.AppendCertsFromPEM(caCert)
+   if !caCertPool.AppendCertsFromPEM(caCert) {
+       return fmt.Errorf("failed to parse CA certificate")
+   }
    
    httpClient := &http.Client{
        Transport: &http.Transport{
-           TLSClientConfig: &tls.Config{RootCAs: caCertPool},
+           TLSClientConfig: &tls.Config{
+               RootCAs:    caCertPool,
+               MinVersion: tls.VersionTLS12,
+           },
        },
+       Timeout: 30 * time.Second,
    }
+   
+   client, err := keycloak.New(ctx, config,
+       keycloak.WithHTTPClient(httpClient),
+   )
    ```
 
 #### Group Not Found Errors
@@ -926,8 +1004,8 @@ type MyService struct {
 1. **Enable retry with backoff**:
 
    ```go
-   client, err := gokeycloak.New(ctx, config,
-       gokeycloak.WithRetry(5, 2*time.Second, 30*time.Second),
+   client, err := keycloak.New(ctx, config,
+       keycloak.WithRetry(5, 2*time.Second, 30*time.Second),
    )
    ```
 
@@ -959,8 +1037,8 @@ for {
 Enable debug logging to see all requests and responses:
 
 ```go
-client, err := gokeycloak.New(ctx, config,
-    gokeycloak.WithDebug(true),
+client, err := keycloak.New(ctx, config,
+    keycloak.WithDebug(true),
 )
 ```
 
@@ -1011,7 +1089,23 @@ A: Yes! Groups support arbitrary attributes as `map[string][]string`.
 A: This depends on your Keycloak instance. The library includes retry logic and supports concurrent requests.
 
 **Q: Should I create one client per request or reuse it?**  
-A: **Reuse the client**. Create one client at application startup and reuse it. The client maintains connection pools and authentication state.
+A: **Always reuse the client**. Create one client at application startup and reuse it throughout your application's lifetime. The client:
+
+- Maintains HTTP connection pools (expensive to recreate)
+- Caches OAuth2 access tokens (avoids repeated authentication)
+- Is safe for concurrent use across goroutines
+- Creating new clients for each request wastes resources and degrades performance
+
+```go
+// ✅ Correct: Single client, initialized once
+var client *keycloak.Client
+
+func main() {
+    var err error
+    client, err = keycloak.New(context.Background(), config)
+    // ... use client throughout application lifecycle
+}
+```
 
 **Q: Does it support connection pooling?**  
 A: Yes, through the underlying `http.Client`. You can customize this with `WithHTTPClient()`.
@@ -1047,7 +1141,19 @@ A: Use `WithProxy(proxyURL)` option when creating the client.
 A: Yes, use `WithHeaders(map[string]string{...})` for headers on all requests.
 
 **Q: What's the default timeout?**  
-A: There's no default timeout. Always set one with `WithTimeout()` or use context timeout.
+A: The client itself doesn't set a default timeout, so requests will use Go's standard HTTP client behavior (no timeout). **Always set an explicit timeout** using `WithTimeout()` when creating the client or use `context.WithTimeout()` for individual operations. This prevents operations from hanging indefinitely.
+
+```go
+// Recommended: Set timeout when creating client
+client, err := keycloak.New(ctx, config,
+    keycloak.WithTimeout(30*time.Second),
+)
+
+// Or use context timeout for specific operations
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+groups, err := client.Groups.List(ctx, nil, false)
+```
 
 ## Architecture
 
@@ -1058,6 +1164,60 @@ The package follows a resource-based client design pattern:
 - **Shared State**: Authentication and configuration shared across all resource clients
 
 This design makes it easy to add new Keycloak resources without bloating a single interface, and allows for better organization and testability.
+
+### Performance Characteristics
+
+Understanding the performance profile helps you optimize your application:
+
+**Connection Management**:
+
+- HTTP connection pooling automatically managed by Go's `http.Client`
+- Keep-alive connections reused across requests
+- Default pool size: 100 idle connections, 10 per host
+
+**Authentication**:
+
+- OAuth2 access tokens cached automatically
+- Token refresh handled transparently before expiration
+- Minimal authentication overhead after initial setup
+
+**Memory Usage**:
+
+- Client baseline: ~2-5 MB (includes HTTP client, configuration, token cache)
+- Per group object: ~1-2 KB (varies with attributes and subgroups)
+- 10,000 groups in memory: ~10-20 MB
+- Use pagination to control memory footprint
+
+**Concurrency**:
+
+- **Thread-safe**: Safe for concurrent use across multiple goroutines
+- No locking in read paths (immutable after initialization)
+- Recommended: Create one client at startup, reuse across application
+
+**Best Practices for Performance**:
+
+```go
+// ✅ Good: Single client instance, reused everywhere
+var keycloakClient *keycloak.Client
+
+func init() {
+    var err error
+    keycloakClient, err = keycloak.New(context.Background(), config)
+    // handle error
+}
+
+// ❌ Bad: Creating new client for each request (wastes resources)
+func handleRequest() {
+    client, _ := keycloak.New(context.Background(), config) // Don't do this!
+}
+```
+
+**Throughput Considerations**:
+
+- Bottleneck is typically Keycloak server, not this client
+- Client can handle hundreds of concurrent requests
+- Use context timeouts to prevent slow requests from blocking
+- Consider rate limiting for bulk operations
 
 ## Configuration
 
@@ -1075,7 +1235,7 @@ The `Config` struct requires the following fields:
 **Example**:
 
 ```go
-config := gokeycloak.Config{
+config := keycloak.Config{
     URL:          "https://keycloak.example.com",
     Realm:        "production",
     ClientID:     "backend-service",
@@ -1093,8 +1253,8 @@ import (
     "log"
 )
 
-func loadConfig() gokeycloak.Config {
-    config := gokeycloak.Config{
+func loadConfig() keycloak.Config {
+    config := keycloak.Config{
         URL:          getEnv("KEYCLOAK_URL", ""),
         Realm:        getEnv("KEYCLOAK_REALM", ""),
         ClientID:     getEnv("KEYCLOAK_CLIENT_ID", ""),
@@ -1145,19 +1305,19 @@ Use functional options to customize client behavior:
 ### Recommended Production Configuration
 
 ```go
-client, err := gokeycloak.New(ctx, config,
+client, err := keycloak.New(ctx, config,
     // Essential for production
-    gokeycloak.WithTimeout(30*time.Second),                    // Prevent hanging
-    gokeycloak.WithRetry(3, 1*time.Second, 10*time.Second),   // Handle transient failures
+    keycloak.WithTimeout(30*time.Second),                    // Prevent hanging
+    keycloak.WithRetry(3, 1*time.Second, 10*time.Second),   // Handle transient failures
     
     // Recommended for operations and debugging
-    gokeycloak.WithUserAgent(fmt.Sprintf("myapp/%s", version)), // Identify your app
-    gokeycloak.WithHeaders(map[string]string{
+    keycloak.WithUserAgent(fmt.Sprintf("myapp/%s", version)), // Identify your app
+    keycloak.WithHeaders(map[string]string{
         "X-Service": "backend-api",                             // For tracking
     }),
     
     // Optional based on your needs
-    gokeycloak.WithPageSize(100),                              // For bulk operations
+    keycloak.WithPageSize(100),                              // For bulk operations
 )
 ```
 
@@ -1185,8 +1345,8 @@ httpClient := &http.Client{
     Timeout: 30 * time.Second,
 }
 
-client, err := gokeycloak.New(ctx, config,
-    gokeycloak.WithHTTPClient(httpClient),
+client, err := keycloak.New(ctx, config,
+    keycloak.WithHTTPClient(httpClient),
 )
 ```
 
@@ -1239,6 +1399,8 @@ go test -v -run TestGroupsMockSuite ./...
 
 Integration tests require a running Keycloak instance. Set up your environment first:
 
+> **⚠️ CRITICAL WARNING**: Integration tests create and delete resources. **NEVER** run them against production! Always use a dedicated test realm.
+
 ```bash
 # Copy the example environment file
 cp .env.example .env
@@ -1250,12 +1412,12 @@ go test -v -tags=integration ./...
 
 **Required environment variables for integration tests:**
 
-- `KEYCLOAK_URL` - Keycloak server URL (e.g., `https://keycloak.example.com`)
+- `KEYCLOAK_URL` - Keycloak server URL (e.g., `http://localhost:8080`)
 - `KEYCLOAK_REALM` - Test realm name (use a dedicated test realm!)
 - `KEYCLOAK_CLIENT_ID` - Client ID with admin privileges
 - `KEYCLOAK_CLIENT_SECRET` - Client secret
 
-**Important:** Always use a dedicated test realm, never run integration tests against production!
+> **💡 Tip**: Use Docker to run a local Keycloak instance for testing. See setup instructions below.
 
 #### Run All Tests
 
@@ -1400,7 +1562,7 @@ func (s *GroupsIntegrationTestSuite) TestGroupLifecycle() {
     s.Equal("Test Group", *group.Name)
 
     // Update
-    group.Description = gokeycloak.StringP("Updated")
+    group.Description = keycloak.StringP("Updated")
     err = s.client.Groups.Update(s.ctx, *group)
     s.NoError(err)
 
@@ -1531,7 +1693,7 @@ When reporting bugs, please include:
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/companyinfo/gokeycloak.git
+   git clone https://github.com/companyinfo/keycloak.git
    cd gokeycloak
    ```
 

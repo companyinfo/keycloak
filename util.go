@@ -76,20 +76,32 @@ func NilOrEmpty(value *string) bool {
 // mapper converts a struct to a map[string]string for use as query parameters.
 // The struct fields must have json tags with "omitempty" for proper serialization.
 // Note: Fields with `json:"name,string,omitempty"` will have quotes in values.
-func mapper(s interface{}) (map[string]string, error) {
+// mapper converts a struct to a map[string]string, suitable for query parameters.
+//
+// It marshals the struct to JSON, then unmarshals into a generic map, converting all values
+// to their string representations. Fields with the `omitempty` tag will be omitted if empty.
+//
+// Note: This does NOT recursively flatten nested structs or handle slices/maps other than basic stringification.
+//       Use only for flat structs intended for query encoding.
+func mapper(s any) (map[string]string, error) {
 	b, err := json.Marshal(s)
 	if err != nil {
-		return nil, err
-	}
-	var res map[string]interface{}
-	err = json.Unmarshal(b, &res)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal struct: %w", err)
 	}
 
-	resStr := make(map[string]string, len(res))
-	for key, elem := range res {
-		resStr[key] = fmt.Sprintf("%v", elem)
+	var generic map[string]any
+	if err := json.Unmarshal(b, &generic); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal json to map: %w", err)
 	}
-	return resStr, nil
+
+	result := make(map[string]string, len(generic))
+	for k, v := range generic {
+		// Defensive: avoid "<nil>" string by explicit nil check, though JSON shouldn't produce nils here.
+		if v == nil {
+			result[k] = ""
+			continue
+		}
+		result[k] = fmt.Sprintf("%v", v)
+	}
+	return result, nil
 }
