@@ -1,4 +1,4 @@
-# Keycloak: Idiomatic Go Client for Keycloak Admin API
+# Keycloak Go Client
 
 [![Go Reference](https://pkg.go.dev/badge/go.companyinfo.dev/keycloak.svg)](https://pkg.go.dev/go.companyinfo.dev/keycloak)
 [![Go Report Card](https://goreportcard.com/badge/go.companyinfo.dev/keycloak)](https://goreportcard.com/report/go.companyinfo.dev/keycloak)
@@ -346,6 +346,9 @@ if err != nil {
 
 #### Example 1: Sync External System with Keycloak Groups
 
+<details>
+<summary><b>View complete example</b> - Sync departments from HR system to Keycloak</summary>
+
 ```go
 // Sync departments from your HR system to Keycloak
 func syncDepartments(ctx context.Context, client *keycloak.Client, departments []Department) error {
@@ -387,7 +390,12 @@ func syncDepartments(ctx context.Context, client *keycloak.Client, departments [
 }
 ```
 
+</details>
+
 #### Example 2: Bulk Operations with Proper Error Handling
+
+<details>
+<summary><b>View complete example</b> - Create multiple groups with rollback on failure</summary>
 
 ```go
 // Create multiple groups with rollback on failure
@@ -432,7 +440,12 @@ func createOrganizationStructure(ctx context.Context, client *keycloak.Client) e
 }
 ```
 
+</details>
+
 #### Example 3: Context with Timeout and Cancellation
+
+<details>
+<summary><b>View complete example</b> - Graceful shutdown with context cancellation</summary>
 
 ```go
 // Graceful shutdown with context cancellation
@@ -494,7 +507,12 @@ func processGroupsWithCancellation(ctx context.Context, client *keycloak.Client)
 }
 ```
 
+</details>
+
 #### Example 4: Production Service with Dependency Injection
+
+<details>
+<summary><b>View complete example</b> - Service pattern with dependency injection and structured logging</summary>
 
 ```go
 // Service struct for dependency injection
@@ -552,6 +570,8 @@ func (s *KeycloakService) GetOrCreateGroup(ctx context.Context, name string) (*k
     return s.client.Groups.Get(ctx, groupID)
 }
 ```
+
+</details>
 
 ## API Reference
 
