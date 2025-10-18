@@ -24,6 +24,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.companyinfo.dev/ptr"
+
 	"github.com/stretchr/testify/suite"
 )
 
@@ -122,10 +124,10 @@ func (s *GroupsMockSuite) mockJSONResponse(method, path string, statusCode int, 
 func (s *GroupsMockSuite) TestGetGroupSuccess() {
 	groupID := "test-group-id"
 	expectedGroup := &Group{
-		ID:          StringP(groupID),
-		Name:        StringP("Test Group"),
-		Path:        StringP("/Test Group"),
-		Description: StringP("A test group"),
+		ID:          ptr.String(groupID),
+		Name:        ptr.String("Test Group"),
+		Path:        ptr.String("/Test Group"),
+		Description: ptr.String("A test group"),
 		Attributes: &map[string][]string{
 			"key1": {"value1"},
 		},
@@ -205,9 +207,9 @@ func (s *GroupsMockSuite) TestCreateGroupInvalidData() {
 // Test Update - Success
 func (s *GroupsMockSuite) TestUpdateGroupSuccess() {
 	group := Group{
-		ID:          StringP("group-id"),
-		Name:        StringP("Updated Group"),
-		Description: StringP("Updated description"),
+		ID:          ptr.String("group-id"),
+		Name:        ptr.String("Updated Group"),
+		Description: ptr.String("Updated description"),
 	}
 
 	path := fmt.Sprintf("/admin/realms/%s/groups/%s", s.mockRealm, *group.ID)
@@ -226,8 +228,8 @@ func (s *GroupsMockSuite) TestUpdateGroupSuccess() {
 // Test Update - Not Found
 func (s *GroupsMockSuite) TestUpdateGroupNotFound() {
 	group := Group{
-		ID:   StringP("missing-group"),
-		Name: StringP("Updated Group"),
+		ID:   ptr.String("missing-group"),
+		Name: ptr.String("Updated Group"),
 	}
 
 	path := fmt.Sprintf("/admin/realms/%s/groups/%s", s.mockRealm, *group.ID)
@@ -269,14 +271,14 @@ func (s *GroupsMockSuite) TestDeleteGroupNotFound() {
 func (s *GroupsMockSuite) TestListGroupsSuccess() {
 	expectedGroups := []*Group{
 		{
-			ID:   StringP("group-1"),
-			Name: StringP("Group 1"),
-			Path: StringP("/Group 1"),
+			ID:   ptr.String("group-1"),
+			Name: ptr.String("Group 1"),
+			Path: ptr.String("/Group 1"),
 		},
 		{
-			ID:   StringP("group-2"),
-			Name: StringP("Group 2"),
-			Path: StringP("/Group 2"),
+			ID:   ptr.String("group-2"),
+			Name: ptr.String("Group 2"),
+			Path: ptr.String("/Group 2"),
 		},
 	}
 
@@ -304,13 +306,13 @@ func (s *GroupsMockSuite) TestListWithParamsExactSearch() {
 	searchTerm := "Test Group"
 	params := SearchGroupParams{
 		Search: &searchTerm,
-		Exact:  BoolP(true),
+		Exact:  ptr.Bool(true),
 	}
 
 	expectedGroups := []*Group{
 		{
-			ID:   StringP("group-1"),
-			Name: StringP("Test Group"),
+			ID:   ptr.String("group-1"),
+			Name: ptr.String("Test Group"),
 		},
 	}
 
@@ -339,19 +341,19 @@ func (s *GroupsMockSuite) TestListWithSubGroupsSuccess() {
 	// Mock response with parent groups containing subgroups
 	expectedGroups := []*Group{
 		{
-			ID:   StringP("parent-1"),
-			Name: StringP("Parent Group 1"),
-			Path: StringP("/Parent Group 1"),
+			ID:   ptr.String("parent-1"),
+			Name: ptr.String("Parent Group 1"),
+			Path: ptr.String("/Parent Group 1"),
 			SubGroups: &[]*Group{
 				{
-					ID:   StringP("child-1"),
-					Name: StringP("Child Group 1"),
-					Path: StringP("/Parent Group 1/Child Group 1"),
+					ID:   ptr.String("child-1"),
+					Name: ptr.String("Child Group 1"),
+					Path: ptr.String("/Parent Group 1/Child Group 1"),
 				},
 				{
-					ID:   StringP("child-2"),
-					Name: StringP("Child Group 2"),
-					Path: StringP("/Parent Group 1/Child Group 2"),
+					ID:   ptr.String("child-2"),
+					Name: ptr.String("Child Group 2"),
+					Path: ptr.String("/Parent Group 1/Child Group 2"),
 				},
 			},
 		},
@@ -394,8 +396,8 @@ func (s *GroupsMockSuite) TestGetByAttributeFound() {
 
 	expectedGroups := []*Group{
 		{
-			ID:   StringP("group-1"),
-			Name: StringP("Matched Group"),
+			ID:   ptr.String("group-1"),
+			Name: ptr.String("Matched Group"),
 			Attributes: &map[string][]string{
 				"customID": {"12345"},
 			},
@@ -460,18 +462,18 @@ func (s *GroupsMockSuite) TestCreateSubGroupSuccess() {
 func (s *GroupsMockSuite) TestListSubGroupsPaginatedSuccess() {
 	parentID := "parent-group-id"
 	params := SubGroupSearchParams{
-		First: IntP(0),
-		Max:   IntP(10),
+		First: ptr.Int(0),
+		Max:   ptr.Int(10),
 	}
 
 	expectedSubGroups := []*Group{
 		{
-			ID:   StringP("sub-1"),
-			Name: StringP("Sub Group 1"),
+			ID:   ptr.String("sub-1"),
+			Name: ptr.String("Sub Group 1"),
 		},
 		{
-			ID:   StringP("sub-2"),
-			Name: StringP("Sub Group 2"),
+			ID:   ptr.String("sub-2"),
+			Name: ptr.String("Sub Group 2"),
 		},
 	}
 
@@ -495,21 +497,21 @@ func (s *GroupsMockSuite) TestListSubGroupsPaginatedSuccess() {
 func (s *GroupsMockSuite) TestListMembersSuccess() {
 	groupID := "group-id"
 	params := GroupMembersParams{
-		BriefRepresentation: BoolP(false),
-		First:               IntP(0),
-		Max:                 IntP(100),
+		BriefRepresentation: ptr.Bool(false),
+		First:               ptr.Int(0),
+		Max:                 ptr.Int(100),
 	}
 
 	expectedMembers := []*User{
 		{
-			ID:       StringP("user-1"),
-			Username: StringP("john.doe"),
-			Email:    StringP("john@example.com"),
+			ID:       ptr.String("user-1"),
+			Username: ptr.String("john.doe"),
+			Email:    ptr.String("john@example.com"),
 		},
 		{
-			ID:       StringP("user-2"),
-			Username: StringP("jane.doe"),
-			Email:    StringP("jane@example.com"),
+			ID:       ptr.String("user-2"),
+			Username: ptr.String("jane.doe"),
+			Email:    ptr.String("jane@example.com"),
 		},
 	}
 
@@ -544,8 +546,8 @@ func (s *GroupsMockSuite) TestCountGroupsSuccess() {
 func (s *GroupsMockSuite) TestGetManagementPermissionsSuccess() {
 	groupID := "group-id"
 	expectedPermissions := ManagementPermissionReference{
-		Enabled:  BoolP(true),
-		Resource: StringP("resource-id"),
+		Enabled:  ptr.Bool(true),
+		Resource: ptr.String("resource-id"),
 	}
 
 	path := fmt.Sprintf("/admin/realms/%s/groups/%s/management/permissions", s.mockRealm, groupID)
@@ -562,7 +564,7 @@ func (s *GroupsMockSuite) TestGetManagementPermissionsSuccess() {
 func (s *GroupsMockSuite) TestUpdateManagementPermissionsSuccess() {
 	groupID := "group-id"
 	ref := ManagementPermissionReference{
-		Enabled: BoolP(true),
+		Enabled: ptr.Bool(true),
 	}
 
 	path := fmt.Sprintf("/admin/realms/%s/groups/%s/management/permissions", s.mockRealm, groupID)

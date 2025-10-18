@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"go.companyinfo.dev/keycloak"
+	"go.companyinfo.dev/ptr"
 )
 
 // ExampleNew demonstrates how to create a new Keycloak client.
@@ -143,9 +144,9 @@ func ExampleGroupsClient_ListWithParams() {
 	searchTerm := "ACME Corp"
 	params := keycloak.SearchGroupParams{
 		Search:            &searchTerm,
-		Exact:             keycloak.BoolP(true),
-		PopulateHierarchy: keycloak.BoolP(true),
-		SubGroupsCount:    keycloak.BoolP(true),
+		Exact:             ptr.Bool(true),
+		PopulateHierarchy: ptr.Bool(true),
+		SubGroupsCount:    ptr.Bool(true),
 	}
 
 	groups, err := client.Groups.ListWithParams(ctx, params)
@@ -162,10 +163,10 @@ func ExampleGroupsClient_ListWithParams() {
 
 	// Example 2: Paginated search with brief representation
 	briefParams := keycloak.SearchGroupParams{
-		BriefRepresentation: keycloak.BoolP(true),
-		First:               keycloak.IntP(0),
-		Max:                 keycloak.IntP(20),
-		Q:                   keycloak.StringP("organization"),
+		BriefRepresentation: ptr.Bool(true),
+		First:               ptr.Int(0),
+		Max:                 ptr.Int(20),
+		Q:                   ptr.String("organization"),
 	}
 
 	briefGroups, err := client.Groups.ListWithParams(ctx, briefParams)
@@ -177,7 +178,7 @@ func ExampleGroupsClient_ListWithParams() {
 
 	// Example 3: Get all top-level groups without subgroups (no search/q parameter)
 	topLevelParams := keycloak.SearchGroupParams{
-		BriefRepresentation: keycloak.BoolP(false),
+		BriefRepresentation: ptr.Bool(false),
 	}
 
 	topLevelGroups, err := client.Groups.ListWithParams(ctx, topLevelParams)
@@ -259,7 +260,7 @@ func ExampleGroupsClient_Update() {
 	}
 
 	// Update description and attributes
-	group.Description = keycloak.StringP("Updated description for the group")
+	group.Description = ptr.String("Updated description for the group")
 
 	if group.Attributes == nil {
 		attrs := make(map[string][]string)
@@ -311,8 +312,8 @@ func ExampleGroupsClient_ListSubGroupsPaginated() {
 
 	// Example 1: Basic pagination
 	params := keycloak.SubGroupSearchParams{
-		First: keycloak.IntP(0),
-		Max:   keycloak.IntP(10),
+		First: ptr.Int(0),
+		Max:   ptr.Int(10),
 	}
 
 	subGroups, err := client.Groups.ListSubGroupsPaginated(ctx, parentGroupID, params)
@@ -330,8 +331,8 @@ func ExampleGroupsClient_ListSubGroupsPaginated() {
 	searchParams := keycloak.SubGroupSearchParams{
 		Search:              &searchTerm,
 		Exact:               &exactMatch,
-		BriefRepresentation: keycloak.BoolP(false),
-		SubGroupsCount:      keycloak.BoolP(true),
+		BriefRepresentation: ptr.Bool(false),
+		SubGroupsCount:      ptr.Bool(true),
 	}
 
 	results, err := client.Groups.ListSubGroupsPaginated(ctx, parentGroupID, searchParams)
@@ -343,9 +344,9 @@ func ExampleGroupsClient_ListSubGroupsPaginated() {
 
 	// Example 3: Brief representation with pagination
 	briefParams := keycloak.SubGroupSearchParams{
-		BriefRepresentation: keycloak.BoolP(true),
-		First:               keycloak.IntP(0),
-		Max:                 keycloak.IntP(20),
+		BriefRepresentation: ptr.Bool(true),
+		First:               ptr.Int(0),
+		Max:                 ptr.Int(20),
 	}
 
 	briefResults, err := client.Groups.ListSubGroupsPaginated(ctx, parentGroupID, briefParams)
@@ -370,9 +371,9 @@ func ExampleGroupsClient_ListMembers() {
 
 	// Example 1: Get all members with full details
 	params := keycloak.GroupMembersParams{
-		BriefRepresentation: keycloak.BoolP(false),
-		First:               keycloak.IntP(0),
-		Max:                 keycloak.IntP(100),
+		BriefRepresentation: ptr.Bool(false),
+		First:               ptr.Int(0),
+		Max:                 ptr.Int(100),
 	}
 
 	members, err := client.Groups.ListMembers(ctx, groupID, params)
@@ -381,12 +382,12 @@ func ExampleGroupsClient_ListMembers() {
 	}
 
 	for _, user := range members {
-		fmt.Printf("User: %s (ID: %s)\n", keycloak.PString(user.Username), keycloak.PString(user.ID))
+		fmt.Printf("User: %s (ID: %s)\n", ptr.ToString(user.Username), ptr.ToString(user.ID))
 		if user.Email != nil {
 			fmt.Printf("  Email: %s (Verified: %v)\n", *user.Email, user.EmailVerified != nil && *user.EmailVerified)
 		}
 		if user.FirstName != nil || user.LastName != nil {
-			fmt.Printf("  Name: %s %s\n", keycloak.PString(user.FirstName), keycloak.PString(user.LastName))
+			fmt.Printf("  Name: %s %s\n", ptr.ToString(user.FirstName), ptr.ToString(user.LastName))
 		}
 		if user.Enabled != nil {
 			fmt.Printf("  Enabled: %v\n", *user.Enabled)
@@ -401,8 +402,8 @@ func ExampleGroupsClient_ListMembers() {
 
 	// Example 2: Get members with brief representation (faster)
 	briefParams := keycloak.GroupMembersParams{
-		BriefRepresentation: keycloak.BoolP(true),
-		Max:                 keycloak.IntP(50),
+		BriefRepresentation: ptr.Bool(true),
+		Max:                 ptr.Int(50),
 	}
 
 	briefMembers, err := client.Groups.ListMembers(ctx, groupID, briefParams)
@@ -454,7 +455,7 @@ func ExampleGroupsClient_UpdateManagementPermissions() {
 
 	// Enable management permissions
 	ref := keycloak.ManagementPermissionReference{
-		Enabled: keycloak.BoolP(true),
+		Enabled: ptr.Bool(true),
 	}
 
 	result, err := client.Groups.UpdateManagementPermissions(ctx, groupID, ref)
@@ -468,7 +469,7 @@ func ExampleGroupsClient_UpdateManagementPermissions() {
 
 	// Disable management permissions
 	disableRef := keycloak.ManagementPermissionReference{
-		Enabled: keycloak.BoolP(false),
+		Enabled: ptr.Bool(false),
 	}
 
 	result, err = client.Groups.UpdateManagementPermissions(ctx, groupID, disableRef)

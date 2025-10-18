@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	"go.companyinfo.dev/keycloak"
+	"go.companyinfo.dev/ptr"
 )
 
 // GroupsIntegrationTestSuite tests Groups operations against a real Keycloak instance.
@@ -129,7 +130,7 @@ func (s *GroupsIntegrationTestSuite) TestGroupLifecycle() {
 
 	// Update
 	newDescription := "Updated description"
-	group.Description = keycloak.StringP(newDescription)
+	group.Description = ptr.String(newDescription)
 	(*group.Attributes)["updated"] = []string{"true"}
 
 	err = s.client.Groups.Update(s.ctx, *group)
@@ -207,7 +208,7 @@ func (s *GroupsIntegrationTestSuite) TestListWithParams() {
 	// Search with exact match
 	params := keycloak.SearchGroupParams{
 		Search: &uniqueName,
-		Exact:  keycloak.BoolP(true),
+		Exact:  ptr.Bool(true),
 	}
 
 	groups, err := s.client.Groups.ListWithParams(s.ctx, params)
@@ -265,7 +266,7 @@ func (s *GroupsIntegrationTestSuite) TestSubGroups() {
 
 	// List subgroups
 	params := keycloak.SubGroupSearchParams{
-		BriefRepresentation: keycloak.BoolP(false),
+		BriefRepresentation: ptr.Bool(false),
 	}
 
 	subGroups, err := s.client.Groups.ListSubGroupsPaginated(s.ctx, parentID, params)
@@ -303,7 +304,7 @@ func (s *GroupsIntegrationTestSuite) TestManagementPermissions() {
 	// Enable permissions if not already enabled
 	if permissions.Enabled == nil || !*permissions.Enabled {
 		ref := keycloak.ManagementPermissionReference{
-			Enabled: keycloak.BoolP(true),
+			Enabled: ptr.Bool(true),
 		}
 
 		result, err := s.client.Groups.UpdateManagementPermissions(s.ctx, groupID, ref)
@@ -349,8 +350,8 @@ func (s *GroupsIntegrationTestSuite) TestErrorHandling() {
 
 	// Try to update non-existent group
 	err = s.client.Groups.Update(s.ctx, keycloak.Group{
-		ID:   keycloak.StringP("non-existent-id"),
-		Name: keycloak.StringP("Test"),
+		ID:   ptr.String("non-existent-id"),
+		Name: ptr.String("Test"),
 	})
 	s.Error(err)
 

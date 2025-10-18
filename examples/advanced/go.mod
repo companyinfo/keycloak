@@ -2,7 +2,10 @@ module go.companyinfo.dev/keycloak/examples/advanced
 
 go 1.24.0
 
-require go.companyinfo.dev/keycloak v0.0.0
+require (
+	go.companyinfo.dev/keycloak v0.0.0
+	go.companyinfo.dev/ptr v0.1.0
+)
 
 require (
 	github.com/coreos/go-oidc/v3 v3.16.0 // indirect

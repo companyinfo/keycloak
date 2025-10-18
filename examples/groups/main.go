@@ -23,7 +23,8 @@ import (
 	"log"
 	"os"
 
-	keycloak "go.companyinfo.dev/keycloak"
+	"go.companyinfo.dev/keycloak"
+	"go.companyinfo.dev/ptr"
 )
 
 func main() {
@@ -68,18 +69,18 @@ func main() {
 	for i, group := range groups {
 		fmt.Printf("%d. %s (ID: %s, Path: %s)\n",
 			i+1,
-			keycloak.PString(group.Name),
-			keycloak.PString(group.ID),
-			keycloak.PString(group.Path))
+			ptr.ToString(group.Name),
+			ptr.ToString(group.ID),
+			ptr.ToString(group.Path))
 
 		// Print subgroups if any (when using search parameter)
 		if group.SubGroups != nil && len(*group.SubGroups) > 0 {
 			fmt.Printf("   Subgroups (%d):\n", len(*group.SubGroups))
 			for _, subgroup := range *group.SubGroups {
 				fmt.Printf("   - %s (ID: %s, Path: %s)\n",
-					keycloak.PString(subgroup.Name),
-					keycloak.PString(subgroup.ID),
-					keycloak.PString(subgroup.Path))
+					ptr.ToString(subgroup.Name),
+					ptr.ToString(subgroup.ID),
+					ptr.ToString(subgroup.Path))
 			}
 		}
 	}
@@ -89,7 +90,7 @@ func main() {
 	// ============================================================================
 	// If you need to fetch subgroups for a specific parent, use ListSubGroups
 	if len(groups) > 0 {
-		groupID := keycloak.PString(groups[0].ID)
+		groupID := ptr.ToString(groups[0].ID)
 		fmt.Printf("\n--- Alternative: Fetching subgroups explicitly for group %s ---\n", groupID)
 
 		subGroups, err := client.Groups.ListSubGroups(ctx, groupID)
@@ -100,9 +101,9 @@ func main() {
 			for i, sub := range subGroups {
 				fmt.Printf("%d. %s (ID: %s, Path: %s)\n",
 					i+1,
-					keycloak.PString(sub.Name),
-					keycloak.PString(sub.ID),
-					keycloak.PString(sub.Path))
+					ptr.ToString(sub.Name),
+					ptr.ToString(sub.ID),
+					ptr.ToString(sub.Path))
 			}
 		}
 	}
@@ -113,15 +114,15 @@ func main() {
 	// Note: Get() method does NOT include subgroups in the response
 	// Use ListSubGroups() if you need to fetch children
 	if len(groups) > 0 {
-		groupID := keycloak.PString(groups[0].ID)
+		groupID := ptr.ToString(groups[0].ID)
 		fmt.Printf("\n--- Get group details for %s ---\n", groupID)
 
 		group, err := client.Groups.Get(ctx, groupID)
 		if err != nil {
 			log.Printf("Failed to get group: %v", err)
 		} else {
-			fmt.Printf("Name: %s\n", keycloak.PString(group.Name))
-			fmt.Printf("Path: %s\n", keycloak.PString(group.Path))
+			fmt.Printf("Name: %s\n", ptr.ToString(group.Name))
+			fmt.Printf("Path: %s\n", ptr.ToString(group.Path))
 			if group.Attributes != nil && len(*group.Attributes) > 0 {
 				fmt.Printf("Attributes: %+v\n", group.Attributes)
 			}

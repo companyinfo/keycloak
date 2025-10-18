@@ -18,9 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
+	"net/url"
+	"path"
 
 	"github.com/go-resty/resty/v2"
+	"go.companyinfo.dev/ptr"
 )
 
 var (
@@ -137,7 +139,7 @@ func (g *groupsClient) Create(ctx context.Context, name string, attributes map[s
 
 // Update updates an existing group with the provided group data.
 func (g *groupsClient) Update(ctx context.Context, group Group) error {
-	if NilOrEmpty(group.ID) {
+	if ptr.IsZero(group.ID) {
 		return fmt.Errorf("the ID of the group is required")
 	}
 
@@ -432,9 +434,10 @@ func (g *groupsClient) getRequest(ctx context.Context) *resty.Request {
 }
 
 // getAdminRealmURL constructs the full URL for Keycloak Admin API group endpoints.
-func (g *groupsClient) getAdminRealmURL(path ...string) string {
-	allPaths := append([]string{g.client.baseURL, g.authAdminRealms, g.client.realm}, path...)
-	return makeURL(allPaths...)
+func (g *groupsClient) getAdminRealmURL(paths ...string) string {
+	allPaths := append([]string{g.authAdminRealms, g.client.realm}, paths...)
+	result, _ := url.JoinPath(g.client.baseURL, allPaths...)
+	return result
 }
 
 // searchInGroupsAttributes searches for a group with a specific attribute in a list of groups.
@@ -468,8 +471,7 @@ func findGroupByAttribute(groups []*Group, attribute GroupAttribute) (*Group, bo
 // getID extracts the resource ID from the Location header in the HTTP response.
 func getID(resp *resty.Response) string {
 	header := resp.Header().Get("Location")
-	splitPath := strings.Split(header, urlSeparator)
-	return splitPath[len(splitPath)-1]
+	return path.Base(header)
 }
 
 // ListMembers retrieves the users that are members of the specified group.

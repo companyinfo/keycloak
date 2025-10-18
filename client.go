@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -237,9 +238,12 @@ func New(ctx context.Context, config Config, opts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("clientSecret is required")
 	}
 
-	authAdminRealms := makeURL("admin", "realms")
-	authRealms := makeURL("realms")
-	realmURL := makeURL(config.URL, authRealms, config.Realm)
+	authAdminRealms := "admin/realms"
+	authRealms := "realms"
+	realmURL, err := url.JoinPath(config.URL, authRealms, config.Realm)
+	if err != nil {
+		return nil, fmt.Errorf("invalid base URL: %w", err)
+	}
 
 	oidcProvider, err := oidc.NewProvider(ctx, realmURL)
 	if err != nil {

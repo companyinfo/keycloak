@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"go.companyinfo.dev/keycloak"
+	"go.companyinfo.dev/ptr"
 )
 
 func main() {
@@ -56,8 +57,8 @@ func main() {
 	fmt.Println("Searching for groups...")
 	searchTerm := "example"
 	params := keycloak.SearchGroupParams{
-		Search: keycloak.StringP(searchTerm),
-		Max:    keycloak.IntP(5),
+		Search: ptr.String(searchTerm),
+		Max:    ptr.Int(5),
 	}
 
 	groups, err := client.Groups.ListWithParams(ctx, params)
@@ -116,10 +117,10 @@ func displayGroup(group *keycloak.Group, indent int) {
 		prefix += "  "
 	}
 
-	fmt.Printf("%s- %s (ID: %s)\n", prefix, keycloak.PString(group.Name), keycloak.PString(group.ID))
+	fmt.Printf("%s- %s (ID: %s)\n", prefix, ptr.ToString(group.Name), ptr.ToString(group.ID))
 
 	if group.Path != nil {
-		fmt.Printf("%s  Path: %s\n", prefix, keycloak.PString(group.Path))
+		fmt.Printf("%s  Path: %s\n", prefix, ptr.ToString(group.Path))
 	}
 
 	if group.Attributes != nil && len(*group.Attributes) > 0 {
