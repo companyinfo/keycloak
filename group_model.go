@@ -70,10 +70,10 @@ type CountGroupResponse struct {
 // These parameters are used with the /groups/{group-id}/children endpoint.
 type SubGroupSearchParams struct {
 	BriefRepresentation *bool   `json:"briefRepresentation,string,omitempty"` // If true, return brief group representations (default: false)
-	Exact               *bool   `json:"exact,string,omitempty"`               // If true, search must match exactly (default: false)
-	First               *int    `json:"first,string,omitempty"`               // Pagination offset (default: 0)
+	Exact               *bool   `json:"exact,string,omitempty"`               // If true, search must match exactly (default: null)
+	First               *int    `json:"first,string,omitempty"`               // Pagination offset (default: null)
 	Max                 *int    `json:"max,string,omitempty"`                 // Maximum results to return (default: 10)
-	Search              *string `json:"search,omitempty"`                     // Search by group name (substring or exact based on 'exact' param)
+	Search              *string `json:"search,omitempty"`                     // Search by group name (substring or exact based on 'exact' param) (default: null)
 	SubGroupsCount      *bool   `json:"subGroupsCount,string,omitempty"`      // If true, return count of subgroups for each result (default: true)
 }
 

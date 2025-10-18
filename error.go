@@ -28,7 +28,7 @@ type HTTPErrorResponse struct {
 
 // Empty returns true if the error response contains no error information.
 func (e HTTPErrorResponse) Empty() bool {
-	return len(e.Error) <= 0 || len(e.Message) <= 0 || len(e.Description) <= 0
+	return len(e.Error) == 0 && len(e.Message) == 0 && len(e.Description) == 0
 }
 
 // String returns a formatted string representation of the error.

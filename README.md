@@ -305,12 +305,6 @@ if err != nil {
     log.Fatalf("Failed to get subgroups: %v", err)
 }
 
-// Count subgroups
-count, err := client.Groups.CountSubGroups(ctx, parentGroupID)
-if err != nil {
-    log.Fatalf("Failed to count subgroups: %v", err)
-}
-
 // Get subgroup by ID
 subGroup, err := client.Groups.GetSubGroupByID(parentGroup, subGroupID)
 if err != nil {
@@ -608,7 +602,6 @@ The `GroupsClient` provides methods for managing Keycloak groups:
 - `CreateSubGroup(ctx, groupID, name, attributes) (string, error)` - Create a subgroup
 - `ListSubGroups(ctx, groupID) ([]*Group, error)` - Get all subgroups
 - `ListSubGroupsPaginated(ctx, groupID, params) ([]*Group, error)` - Get paginated subgroups with search
-- `CountSubGroups(ctx, groupID) (int, error)` - Get count of subgroups
 - `GetSubGroupByID(group, subGroupID) (*Group, error)` - Find subgroup by ID
 - `GetSubGroupByAttribute(group, attribute) (*Group, error)` - Find subgroup by attribute
 

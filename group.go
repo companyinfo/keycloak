@@ -38,6 +38,7 @@ type GroupsClient interface {
 	Create(ctx context.Context, name string, attributes map[string][]string) (string, error)
 
 	// Update updates an existing group with the provided group data.
+	// Note: This operation ignores the SubGroups field. Use CreateSubGroup to manage subgroups.
 	Update(ctx context.Context, updatedGroup Group) error
 
 	// Delete deletes a group by its ID.
@@ -75,15 +76,13 @@ type GroupsClient interface {
 	// ListSubGroups retrieves all direct child groups of the specified parent group.
 	ListSubGroups(ctx context.Context, groupID string) ([]*Group, error)
 
-	// CountSubGroups returns the count of direct child groups.
-	CountSubGroups(ctx context.Context, groupID string) (int, error)
-
 	// ListSubGroupsPaginated retrieves a paginated list of subgroups with optional search filtering.
 	// Uses the /groups/{group-id}/children endpoint for server-side pagination and filtering.
 	ListSubGroupsPaginated(ctx context.Context, groupID string, params SubGroupSearchParams) ([]*Group, error)
 
 	// CreateSubGroup creates a new subgroup under the specified parent group.
-	// Returns the newly created subgroup's ID.
+	// If the group already exists, this will set/update its parent relationship.
+	// Returns the newly created subgroup's ID (or empty string if group already existed).
 	CreateSubGroup(ctx context.Context, groupID, name string, attributes map[string][]string) (string, error)
 
 	// GetSubGroupByAttribute searches for a subgroup with the specified attribute within a parent group.
@@ -138,6 +137,7 @@ func (g *groupsClient) Create(ctx context.Context, name string, attributes map[s
 }
 
 // Update updates an existing group with the provided group data.
+// Note: This operation ignores the SubGroups field. To manage subgroups, use CreateSubGroup.
 func (g *groupsClient) Update(ctx context.Context, group Group) error {
 	if ptr.IsZero(group.ID) {
 		return fmt.Errorf("the ID of the group is required")
@@ -288,7 +288,7 @@ func (g *groupsClient) GetByAttribute(ctx context.Context, attribute *GroupAttri
 		}
 
 		// iterate result and look for the Reference
-		if group, ok := searchInGroupsAttributes(groups, *attribute); ok {
+		if group, ok := findGroupByAttribute(groups, *attribute); ok {
 			return group, nil
 		}
 
@@ -313,6 +313,8 @@ func (g *groupsClient) GetSubGroupByID(group Group, subGroupID string) (*Group, 
 }
 
 // CreateSubGroup creates a new subgroup under the specified parent group.
+// If the group already exists, this will set/update its parent relationship.
+// Returns the subgroup ID. May return empty string if the group already existed (204 response).
 func (g *groupsClient) CreateSubGroup(ctx context.Context, groupID, name string, attributes map[string][]string) (string, error) {
 	if groupID == "" {
 		return "", errors.New("groupID parameter cannot be empty")
@@ -376,25 +378,6 @@ func (g *groupsClient) ListSubGroupsPaginated(ctx context.Context, groupID strin
 	return result, nil
 }
 
-// CountSubGroups returns the count of direct child groups.
-func (g *groupsClient) CountSubGroups(ctx context.Context, groupID string) (int, error) {
-	var result Group
-	resp, err := g.getRequest(ctx).SetResult(&result).Get(g.getAdminRealmURL("groups", groupID))
-	if err != nil {
-		return 0, fmt.Errorf("unable to list sub-groups: %w", err)
-	}
-
-	if !resp.IsSuccess() {
-		return 0, fmt.Errorf("unable to list sub-groups: %v", resp.Error())
-	}
-
-	if result.SubGroups == nil {
-		return 0, nil
-	}
-
-	return len(*result.SubGroups), nil
-}
-
 // GetSubGroupByAttribute searches for a subgroup with the specified attribute within a parent group.
 func (g *groupsClient) GetSubGroupByAttribute(group Group, attribute GroupAttribute) (*Group, error) {
 	if group.SubGroups == nil {
@@ -440,11 +423,6 @@ func (g *groupsClient) getAdminRealmURL(paths ...string) string {
 	return result
 }
 
-// searchInGroupsAttributes searches for a group with a specific attribute in a list of groups.
-func searchInGroupsAttributes(groups []*Group, attribute GroupAttribute) (*Group, bool) {
-	return findGroupByAttribute(groups, attribute)
-}
-
 // findGroupByAttribute is a helper function that searches for a group with a specific attribute
 // in a slice of groups. It returns the matching group and a boolean indicating if found.
 func findGroupByAttribute(groups []*Group, attribute GroupAttribute) (*Group, bool) {
@@ -469,8 +447,12 @@ func findGroupByAttribute(groups []*Group, attribute GroupAttribute) (*Group, bo
 }
 
 // getID extracts the resource ID from the Location header in the HTTP response.
+// Returns an empty string if the Location header is not present.
 func getID(resp *resty.Response) string {
 	header := resp.Header().Get("Location")
+	if header == "" {
+		return ""
+	}
 	return path.Base(header)
 }
 
