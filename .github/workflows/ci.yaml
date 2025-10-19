@@ -66,30 +66,20 @@ jobs:
     name: Integration Tests
     needs: check
     runs-on: ubuntu-latest
-    
-    # Service container for Keycloak
-    services:
-      keycloak:
-        image: quay.io/keycloak/keycloak:26.0.7
-        env:
-          KEYCLOAK_ADMIN: admin
-          KEYCLOAK_ADMIN_PASSWORD: admin
-          KC_HTTP_ENABLED: "true"
-          KC_HOSTNAME_STRICT: "false"
-          KC_HOSTNAME_STRICT_HTTPS: "false"
-          KC_HEALTH_ENABLED: "true"
-          KC_HTTP_MANAGEMENT_HEALTH_ENABLED: "false"
-        ports:
-          - 8080:8080
-        options: >-
-          --health-cmd "curl -sf http://localhost:8080/realms/master || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 30
-          --health-start-period 60s
-          start-dev
 
     steps:
+    - name: Start Keycloak
+      run: |
+        docker run -d --name keycloak \
+          -p 8080:8080 \
+          -e KEYCLOAK_ADMIN=admin \
+          -e KEYCLOAK_ADMIN_PASSWORD=admin \
+          -e KC_HTTP_ENABLED=true \
+          -e KC_HOSTNAME_STRICT=false \
+          -e KC_HOSTNAME_STRICT_HTTPS=false \
+          -e KC_HEALTH_ENABLED=true \
+          quay.io/keycloak/keycloak:26.0.7 \
+          start-dev
     - name: Checkout Code
       uses: actions/checkout@v5
 
@@ -221,6 +211,10 @@ jobs:
         files: ./coverage-integration.txt
         flags: integration
         name: integration-tests
+
+    - name: Stop Keycloak
+      if: always()
+      run: docker stop keycloak && docker rm keycloak
 
   # Combined coverage report
   coverage-report:
