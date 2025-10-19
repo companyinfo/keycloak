@@ -1,5 +1,7 @@
 # Keycloak Go Client
 
+[![CI](https://github.com/companyinfo/keycloak/actions/workflows/ci.yaml/badge.svg)](https://github.com/companyinfo/keycloak/actions/workflows/ci.yaml)
+[![codecov](https://codecov.io/gh/companyinfo/keycloak/branch/main/graph/badge.svg)](https://codecov.io/gh/companyinfo/keycloak)
 [![Go Reference](https://pkg.go.dev/badge/go.companyinfo.dev/keycloak.svg)](https://pkg.go.dev/go.companyinfo.dev/keycloak)
 [![Go Report Card](https://goreportcard.com/badge/go.companyinfo.dev/keycloak)](https://goreportcard.com/report/go.companyinfo.dev/keycloak)
 [![Go Version](https://img.shields.io/badge/Go-1.24+-blue)](https://go.dev/dl/)
@@ -78,7 +80,7 @@ import "go.companyinfo.dev/keycloak"
 client, err := keycloak.New(ctx, keycloak.Config{...})
 ```
 
-> **📝 Note**: Some examples in the wild may use `gokeycloak` as an import alias, but it's not necessary. The package name is `keycloak`.
+> **📝 Note**: Some examples in the wild may use `keycloak` as an import alias, but it's not necessary. The package name is `keycloak`.
 
 ## Quick Start
 
@@ -1707,7 +1709,7 @@ When reporting bugs, please include:
 
    ```bash
    git clone https://github.com/companyinfo/keycloak.git
-   cd gokeycloak
+   cd keycloak
    ```
 
 2. Install dependencies:

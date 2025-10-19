@@ -78,7 +78,7 @@ jobs:
           -e KC_HOSTNAME_STRICT=false \
           -e KC_HOSTNAME_STRICT_HTTPS=false \
           -e KC_HEALTH_ENABLED=true \
-          quay.io/keycloak/keycloak:26.0.7 \
+          quay.io/keycloak/keycloak:26.4 \
           start-dev
     - name: Checkout Code
       uses: actions/checkout@v5
