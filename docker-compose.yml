@@ -1,0 +1,54 @@
+# Docker Compose for Keycloak Integration Testing
+# 
+# This file provides a local Keycloak instance for running integration tests.
+# 
+# Usage:
+#   docker compose up -d        # Start Keycloak in background
+#   ./scripts/setup-keycloak.sh # Configure test realm and client
+#   go test -tags=integration   # Run integration tests
+#   docker compose down         # Stop and remove containers
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    container_name: keycloak-test
+    environment:
+      # Admin credentials
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      
+      # Development mode settings
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_MANAGEMENT_HEALTH_ENABLED: "false"
+      
+      # Database (dev mode uses H2)
+      KC_DB: dev-file
+      
+      # Logging
+      KC_LOG_LEVEL: info
+      
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    
+    command:
+      - start-dev
+    
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /realms/master HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    
+    # Optional: Persist data across restarts
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+
+volumes:
+  keycloak-data:
+    driver: local
+

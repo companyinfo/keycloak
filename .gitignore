@@ -13,6 +13,11 @@
 coverage.txt
 coverage.html
 
+# Environment files with credentials
+.env
+.env.local
+.env.*.local
+
 # Dependency directories
 vendor/
 

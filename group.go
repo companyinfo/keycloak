@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"path"
 
 	"github.com/go-resty/resty/v2"
@@ -106,15 +105,13 @@ type GroupsClient interface {
 
 // groupsClient implements the GroupsClient interface.
 type groupsClient struct {
-	client          *Client
-	authAdminRealms string
+	client *Client
 }
 
 // newGroupsClient creates a new GroupsClient implementation.
-func newGroupsClient(client *Client, authAdminRealms string) GroupsClient {
+func newGroupsClient(client *Client) GroupsClient {
 	return &groupsClient{
-		client:          client,
-		authAdminRealms: authAdminRealms,
+		client: client,
 	}
 }
 
@@ -125,7 +122,9 @@ func (g *groupsClient) Create(ctx context.Context, name string, attributes map[s
 		Attributes: &attributes,
 	}
 
-	resp, err := g.getRequest(ctx).SetBody(group).Post(g.getAdminRealmURL("groups"))
+	resp, err := g.getRequest(ctx).
+		SetBody(group).
+		Execute(endpointGroupsCreate.Method, g.client.buildURL(endpointGroupsCreate, nil))
 	if err != nil {
 		return "", fmt.Errorf("unable to create group: %w", err)
 	}
@@ -143,7 +142,9 @@ func (g *groupsClient) Update(ctx context.Context, group Group) error {
 		return fmt.Errorf("the ID of the group is required")
 	}
 
-	resp, err := g.getRequest(ctx).SetBody(group).Put(g.getAdminRealmURL("groups", *group.ID))
+	resp, err := g.getRequest(ctx).
+		SetBody(group).
+		Execute(endpointGroupUpdate.Method, g.client.buildURL(endpointGroupUpdate, map[string]string{"groupID": *group.ID}))
 	if err != nil {
 		return fmt.Errorf("unable to update group: %w", err)
 	}
@@ -212,7 +213,10 @@ func (g *groupsClient) list(ctx context.Context, params SearchGroupParams) ([]*G
 		return nil, fmt.Errorf("failed to initiate search parameters of groups: %w", err)
 	}
 
-	resp, err := g.getRequest(ctx).SetResult(&result).SetQueryParams(queryParams).Get(g.getAdminRealmURL("groups"))
+	resp, err := g.getRequest(ctx).
+		SetResult(&result).
+		SetQueryParams(queryParams).
+		Execute(endpointGroupsList.Method, g.client.buildURL(endpointGroupsList, nil))
 	if err != nil {
 		return nil, fmt.Errorf("unable to list groups: %w", err)
 	}
@@ -236,7 +240,10 @@ func (g *groupsClient) Count(ctx context.Context, search *string, top *bool) (in
 		return 0, fmt.Errorf("failed to initiate search parameters of groups: %w", err)
 	}
 
-	resp, err := g.getRequest(ctx).SetResult(&result).SetQueryParams(queryParams).Get(g.getAdminRealmURL("groups", "count"))
+	resp, err := g.getRequest(ctx).
+		SetResult(&result).
+		SetQueryParams(queryParams).
+		Execute(endpointGroupsCount.Method, g.client.buildURL(endpointGroupsCount, nil))
 	if err != nil {
 		return 0, fmt.Errorf("unable to count groups: %w", err)
 	}
@@ -250,9 +257,15 @@ func (g *groupsClient) Count(ctx context.Context, search *string, top *bool) (in
 
 // Get retrieves a single group by its ID.
 func (g *groupsClient) Get(ctx context.Context, groupID string) (*Group, error) {
+	if groupID == "" {
+		return nil, fmt.Errorf("groupID parameter cannot be empty")
+	}
+
 	var result Group
 
-	resp, err := g.getRequest(ctx).SetResult(&result).Get(g.getAdminRealmURL("groups", groupID))
+	resp, err := g.getRequest(ctx).
+		SetResult(&result).
+		Execute(endpointGroupGet.Method, g.client.buildURL(endpointGroupGet, map[string]string{"groupID": groupID}))
 	if err != nil {
 		return nil, fmt.Errorf("unable to get group: %w", err)
 	}
@@ -269,9 +282,17 @@ func (g *groupsClient) Get(ctx context.Context, groupID string) (*Group, error) 
 }
 
 // GetByAttribute searches for a group with the specified attribute key-value pair.
+// This method performs a client-side search by fetching all groups page by page
+// and examining their attributes. For realms with many groups, this may be slow.
+//
+// Performance Note: This operation fetches all groups from Keycloak and searches
+// them client-side. In large realms (1000+ groups), consider using alternative
+// approaches like caching or direct API queries if your use case allows.
+//
+// Returns ErrGroupNotFound if no matching group is found.
 func (g *groupsClient) GetByAttribute(ctx context.Context, attribute *GroupAttribute) (*Group, error) {
 	if attribute == nil {
-		return nil, errors.New("attributes map is empty")
+		return nil, errors.New("attribute parameter cannot be nil")
 	}
 
 	currentPage := 0
@@ -303,6 +324,10 @@ func (g *groupsClient) GetByAttribute(ctx context.Context, attribute *GroupAttri
 
 // GetSubGroupByID finds a subgroup by its ID within a parent group's children.
 func (g *groupsClient) GetSubGroupByID(group Group, subGroupID string) (*Group, error) {
+	if group.SubGroups == nil {
+		return nil, ErrGroupNotFound
+	}
+
 	for _, subGroup := range *group.SubGroups {
 		if subGroup != nil && subGroup.ID != nil && *subGroup.ID == subGroupID {
 			return subGroup, nil
@@ -325,7 +350,9 @@ func (g *groupsClient) CreateSubGroup(ctx context.Context, groupID, name string,
 		Attributes: &attributes,
 	}
 
-	resp, err := g.getRequest(ctx).SetBody(group).Post(g.getAdminRealmURL("groups", groupID, "children"))
+	resp, err := g.getRequest(ctx).
+		SetBody(group).
+		Execute(endpointGroupChildCreate.Method, g.client.buildURL(endpointGroupChildCreate, map[string]string{"groupID": groupID}))
 	if err != nil {
 		return "", fmt.Errorf("unable to create sub-group: %w", err)
 	}
@@ -338,9 +365,15 @@ func (g *groupsClient) CreateSubGroup(ctx context.Context, groupID, name string,
 
 // ListSubGroups retrieves all direct child groups of the specified parent group.
 func (g *groupsClient) ListSubGroups(ctx context.Context, groupID string) ([]*Group, error) {
+	if groupID == "" {
+		return nil, fmt.Errorf("groupID parameter cannot be empty")
+	}
+
 	var result []*Group
 
-	resp, err := g.getRequest(ctx).SetResult(&result).Get(g.getAdminRealmURL("groups", groupID, "children"))
+	resp, err := g.getRequest(ctx).
+		SetResult(&result).
+		Execute(endpointGroupChildren.Method, g.client.buildURL(endpointGroupChildren, map[string]string{"groupID": groupID}))
 	if err != nil {
 		return nil, fmt.Errorf("unable to list groups: %w", err)
 	}
@@ -366,7 +399,10 @@ func (g *groupsClient) ListSubGroupsPaginated(ctx context.Context, groupID strin
 		return nil, fmt.Errorf("failed to initiate search parameters for sub-groups: %w", err)
 	}
 
-	resp, err := g.getRequest(ctx).SetResult(&result).SetQueryParams(queryParams).Get(g.getAdminRealmURL("groups", groupID, "children"))
+	resp, err := g.getRequest(ctx).
+		SetResult(&result).
+		SetQueryParams(queryParams).
+		Execute(endpointGroupChildren.Method, g.client.buildURL(endpointGroupChildren, map[string]string{"groupID": groupID}))
 	if err != nil {
 		return nil, fmt.Errorf("unable to list sub-groups: %w", err)
 	}
@@ -381,12 +417,12 @@ func (g *groupsClient) ListSubGroupsPaginated(ctx context.Context, groupID strin
 // GetSubGroupByAttribute searches for a subgroup with the specified attribute within a parent group.
 func (g *groupsClient) GetSubGroupByAttribute(group Group, attribute GroupAttribute) (*Group, error) {
 	if group.SubGroups == nil {
-		return nil, fmt.Errorf("unable to find subgroup")
+		return nil, ErrGroupNotFound
 	}
 
 	subGroup, found := findGroupByAttribute(*group.SubGroups, attribute)
 	if !found {
-		return nil, fmt.Errorf("unable to find subgroup")
+		return nil, ErrGroupNotFound
 	}
 
 	return subGroup, nil
@@ -398,7 +434,8 @@ func (g *groupsClient) Delete(ctx context.Context, groupID string) error {
 		return fmt.Errorf("groupID parameter cannot be empty")
 	}
 
-	resp, err := g.getRequest(ctx).Delete(g.getAdminRealmURL("groups", groupID))
+	resp, err := g.getRequest(ctx).
+		Execute(endpointGroupDelete.Method, g.client.buildURL(endpointGroupDelete, map[string]string{"groupID": groupID}))
 	if err != nil {
 		return fmt.Errorf("unable to delete group: %w", err)
 	}
@@ -414,13 +451,6 @@ func (g *groupsClient) Delete(ctx context.Context, groupID string) error {
 func (g *groupsClient) getRequest(ctx context.Context) *resty.Request {
 	var err HTTPErrorResponse
 	return g.client.resty.R().SetContext(ctx).SetError(&err)
-}
-
-// getAdminRealmURL constructs the full URL for Keycloak Admin API group endpoints.
-func (g *groupsClient) getAdminRealmURL(paths ...string) string {
-	allPaths := append([]string{g.authAdminRealms, g.client.realm}, paths...)
-	result, _ := url.JoinPath(g.client.baseURL, allPaths...)
-	return result
 }
 
 // findGroupByAttribute is a helper function that searches for a group with a specific attribute
@@ -469,7 +499,10 @@ func (g *groupsClient) ListMembers(ctx context.Context, groupID string, params G
 		return nil, fmt.Errorf("failed to initiate search parameters for group members: %w", err)
 	}
 
-	resp, err := g.getRequest(ctx).SetResult(&result).SetQueryParams(queryParams).Get(g.getAdminRealmURL("groups", groupID, "members"))
+	resp, err := g.getRequest(ctx).
+		SetResult(&result).
+		SetQueryParams(queryParams).
+		Execute(endpointGroupMembers.Method, g.client.buildURL(endpointGroupMembers, map[string]string{"groupID": groupID}))
 	if err != nil {
 		return nil, fmt.Errorf("unable to list group members: %w", err)
 	}
@@ -489,7 +522,9 @@ func (g *groupsClient) GetManagementPermissions(ctx context.Context, groupID str
 
 	var result ManagementPermissionReference
 
-	resp, err := g.getRequest(ctx).SetResult(&result).Get(g.getAdminRealmURL("groups", groupID, "management", "permissions"))
+	resp, err := g.getRequest(ctx).
+		SetResult(&result).
+		Execute(endpointGroupPermsGet.Method, g.client.buildURL(endpointGroupPermsGet, map[string]string{"groupID": groupID}))
 	if err != nil {
 		return nil, fmt.Errorf("unable to get management permissions: %w", err)
 	}
@@ -509,7 +544,10 @@ func (g *groupsClient) UpdateManagementPermissions(ctx context.Context, groupID 
 
 	var result ManagementPermissionReference
 
-	resp, err := g.getRequest(ctx).SetBody(ref).SetResult(&result).Put(g.getAdminRealmURL("groups", groupID, "management", "permissions"))
+	resp, err := g.getRequest(ctx).
+		SetBody(ref).
+		SetResult(&result).
+		Execute(endpointGroupPermsUpdate.Method, g.client.buildURL(endpointGroupPermsUpdate, map[string]string{"groupID": groupID}))
 	if err != nil {
 		return nil, fmt.Errorf("unable to update management permissions: %w", err)
 	}

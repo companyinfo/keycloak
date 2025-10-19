@@ -180,7 +180,7 @@ func TestGroupsClient_GetByAttributeValidation(t *testing.T) {
 			name:      "nil attribute",
 			attribute: nil,
 			wantErr:   true,
-			errString: "attributes map is empty",
+			errString: "attribute parameter cannot be nil",
 		},
 	}
 

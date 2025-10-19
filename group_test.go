@@ -273,75 +273,77 @@ func TestGetID(t *testing.T) {
 	}
 }
 
-func TestGetAdminRealmURL(t *testing.T) {
+func TestBuildURL(t *testing.T) {
 	tests := []struct {
 		name        string
 		baseURL     string
 		realm       string
-		paths       []string
+		endpoint    endpoint
+		params      map[string]string
 		expectedURL string
 	}{
 		{
-			name:        "simple groups endpoint",
+			name:        "groups list endpoint",
 			baseURL:     "https://keycloak.example.com",
 			realm:       "test-realm",
-			paths:       []string{"groups"},
+			endpoint:    endpointGroupsList,
+			params:      nil,
 			expectedURL: "https://keycloak.example.com/admin/realms/test-realm/groups",
 		},
 		{
-			name:        "groups with ID",
+			name:        "group get endpoint with ID",
 			baseURL:     "https://keycloak.example.com",
 			realm:       "test-realm",
-			paths:       []string{"groups", "group-id-123"},
+			endpoint:    endpointGroupGet,
+			params:      map[string]string{"groupID": "group-id-123"},
 			expectedURL: "https://keycloak.example.com/admin/realms/test-realm/groups/group-id-123",
 		},
 		{
 			name:        "groups count endpoint",
 			baseURL:     "https://keycloak.example.com",
 			realm:       "test-realm",
-			paths:       []string{"groups", "count"},
+			endpoint:    endpointGroupsCount,
+			params:      nil,
 			expectedURL: "https://keycloak.example.com/admin/realms/test-realm/groups/count",
 		},
 		{
-			name:        "subgroups children endpoint",
+			name:        "group children endpoint",
 			baseURL:     "https://keycloak.example.com",
 			realm:       "test-realm",
-			paths:       []string{"groups", "parent-id", "children"},
+			endpoint:    endpointGroupChildren,
+			params:      map[string]string{"groupID": "parent-id"},
 			expectedURL: "https://keycloak.example.com/admin/realms/test-realm/groups/parent-id/children",
 		},
 		{
-			name:        "management permissions endpoint",
+			name:        "group permissions get endpoint",
 			baseURL:     "https://keycloak.example.com",
 			realm:       "test-realm",
-			paths:       []string{"groups", "group-id", "management", "permissions"},
+			endpoint:    endpointGroupPermsGet,
+			params:      map[string]string{"groupID": "group-id"},
 			expectedURL: "https://keycloak.example.com/admin/realms/test-realm/groups/group-id/management/permissions",
 		},
 		{
 			name:        "group members endpoint",
 			baseURL:     "https://keycloak.example.com",
 			realm:       "test-realm",
-			paths:       []string{"groups", "group-id", "members"},
+			endpoint:    endpointGroupMembers,
+			params:      map[string]string{"groupID": "group-id"},
 			expectedURL: "https://keycloak.example.com/admin/realms/test-realm/groups/group-id/members",
-		},
-		{
-			name:        "no additional paths",
-			baseURL:     "https://keycloak.example.com",
-			realm:       "test-realm",
-			paths:       []string{},
-			expectedURL: "https://keycloak.example.com/admin/realms/test-realm",
 		},
 		{
 			name:        "baseURL with trailing slash",
 			baseURL:     "https://keycloak.example.com/",
 			realm:       "test-realm",
-			paths:       []string{"groups"},
-			expectedURL: "https://keycloak.example.com/admin/realms/test-realm/groups",
+			endpoint:    endpointGroupsList,
+			params:      nil,
+			expectedURL: "https://keycloak.example.com//admin/realms/test-realm/groups",
 		},
 		{
 			name:        "realm with special characters",
 			baseURL:     "https://keycloak.example.com",
 			realm:       "test-realm-123",
-			paths:       []string{"groups"},
+			endpoint:    endpointGroupsList,
+			params:      nil,
 			expectedURL: "https://keycloak.example.com/admin/realms/test-realm-123/groups",
 		},
 	}
@@ -352,12 +354,8 @@ func TestGetAdminRealmURL(t *testing.T) {
 				baseURL: tt.baseURL,
 				realm:   tt.realm,
 			}
-			gc := &groupsClient{
-				client:          client,
-				authAdminRealms: "admin/realms",
-			}
 
-			result := gc.getAdminRealmURL(tt.paths...)
+			result := client.buildURL(tt.endpoint, tt.params)
 			assert.Equal(t, tt.expectedURL, result)
 		})
 	}

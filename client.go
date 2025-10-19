@@ -27,7 +27,10 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
-const defaultSize = 50
+const (
+	defaultSize = 50
+	realmsPath  = "realms"
+)
 
 // Client is the main entry point for the Keycloak Admin API.
 // It provides access to resource-specific clients for managing different Keycloak resources.
@@ -238,9 +241,7 @@ func New(ctx context.Context, config Config, opts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("clientSecret is required")
 	}
 
-	authAdminRealms := "admin/realms"
-	authRealms := "realms"
-	realmURL, err := url.JoinPath(config.URL, authRealms, config.Realm)
+	realmURL, err := url.JoinPath(config.URL, realmsPath, config.Realm)
 	if err != nil {
 		return nil, fmt.Errorf("invalid base URL: %w", err)
 	}
@@ -273,7 +274,7 @@ func New(ctx context.Context, config Config, opts ...Option) (*Client, error) {
 	}
 
 	// Initialize resource clients (after all options applied)
-	client.Groups = newGroupsClient(client, authAdminRealms)
+	client.Groups = newGroupsClient(client)
 
 	return client, nil
 }

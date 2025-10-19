@@ -37,8 +37,8 @@ jobs:
     - name: go-vet
       run: go vet ./...
 
-  test:
-    name: Test
+  unit-test:
+    name: Unit Tests
     needs: check
     runs-on: ubuntu-latest
     steps:
@@ -51,10 +51,189 @@ jobs:
         go-version: 1.24.x
         cache-dependency-path: go.sum
 
-    - name: Test Keycloak
-      run: go test -race -v -coverprofile=coverage.txt ./...
+    - name: Run Unit Tests
+      run: go test -race -v -coverprofile=coverage.txt -short ./...
 
-    - name: Upload results to Codecov
+    - name: Upload Coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage.txt
+        flags: unittests
+        name: unit-tests
+
+  integration-test:
+    name: Integration Tests
+    needs: check
+    runs-on: ubuntu-latest
+    
+    # Service container for Keycloak
+    services:
+      keycloak:
+        image: quay.io/keycloak/keycloak:26.0.7
+        env:
+          KEYCLOAK_ADMIN: admin
+          KEYCLOAK_ADMIN_PASSWORD: admin
+          KC_HTTP_ENABLED: "true"
+          KC_HOSTNAME_STRICT: "false"
+          KC_HOSTNAME_STRICT_HTTPS: "false"
+          KC_HEALTH_ENABLED: "true"
+          KC_HTTP_MANAGEMENT_HEALTH_ENABLED: "false"
+        ports:
+          - 8080:8080
+        options: >-
+          --health-cmd "curl -sf http://localhost:8080/realms/master || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+          --health-start-period 60s
+          start-dev
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v5
+
+    - name: Set up Go 1.24.x
+      uses: actions/setup-go@v6
+      with:
+        go-version: 1.24.x
+        cache-dependency-path: go.sum
+
+    - name: Wait for Keycloak to be Ready
+      run: |
+        echo "Waiting for Keycloak to be fully ready..."
+        max_attempts=60
+        attempt=0
+        while [ $attempt -lt $max_attempts ]; do
+          if curl -sf http://localhost:8080/realms/master > /dev/null 2>&1; then
+            echo "Keycloak is ready!"
+            break
+          fi
+          echo "Waiting for Keycloak... (attempt $((attempt + 1))/$max_attempts)"
+          sleep 2
+          attempt=$((attempt + 1))
+        done
+        
+        if [ $attempt -eq $max_attempts ]; then
+          echo "Keycloak failed to become ready in time"
+          exit 1
+        fi
+        
+        # Give it a few more seconds to stabilize
+        sleep 5
+
+    - name: Configure Keycloak Test Realm
+      run: |
+        # Get admin access token
+        TOKEN=$(curl -X POST "http://localhost:8080/realms/master/protocol/openid-connect/token" \
+          -H "Content-Type: application/x-www-form-urlencoded" \
+          -d "username=admin" \
+          -d "password=admin" \
+          -d "grant_type=password" \
+          -d "client_id=admin-cli" | jq -r '.access_token')
+        
+        echo "Admin token obtained"
+        
+        # Create test realm
+        curl -X POST "http://localhost:8080/admin/realms" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "realm": "test-realm",
+            "enabled": true,
+            "displayName": "Test Realm for CI"
+          }'
+        
+        echo "Test realm created"
+        
+        # Create test client with service account
+        curl -X POST "http://localhost:8080/admin/realms/test-realm/clients" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "clientId": "test-client",
+            "enabled": true,
+            "serviceAccountsEnabled": true,
+            "publicClient": false,
+            "protocol": "openid-connect",
+            "secret": "test-secret-12345"
+          }'
+        
+        echo "Test client created"
+        
+        # Get the client's UUID
+        CLIENT_UUID=$(curl -X GET "http://localhost:8080/admin/realms/test-realm/clients?clientId=test-client" \
+          -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+        
+        echo "Client UUID: $CLIENT_UUID"
+        
+        # Get service account user ID
+        SERVICE_ACCOUNT_USER=$(curl -X GET "http://localhost:8080/admin/realms/test-realm/clients/$CLIENT_UUID/service-account-user" \
+          -H "Authorization: Bearer $TOKEN" | jq -r '.id')
+        
+        echo "Service account user ID: $SERVICE_ACCOUNT_USER"
+        
+        # Get realm-management client ID
+        REALM_MGMT_CLIENT=$(curl -X GET "http://localhost:8080/admin/realms/test-realm/clients?clientId=realm-management" \
+          -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+        
+        # Get all available roles that match our needs
+        ALL_ROLES=$(curl -X GET "http://localhost:8080/admin/realms/test-realm/clients/$REALM_MGMT_CLIENT/roles" \
+          -H "Authorization: Bearer $TOKEN" | jq -c 'map(select(.name | IN("manage-groups", "view-users", "manage-users", "query-groups")))')
+        
+        # Assign roles to service account
+        curl -X POST "http://localhost:8080/admin/realms/test-realm/users/$SERVICE_ACCOUNT_USER/role-mappings/clients/$REALM_MGMT_CLIENT" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$ALL_ROLES"
+        
+        echo "Roles assigned to service account"
+        
+        # Verify configuration
+        echo "Testing client credentials..."
+        TEST_TOKEN=$(curl -X POST "http://localhost:8080/realms/test-realm/protocol/openid-connect/token" \
+          -H "Content-Type: application/x-www-form-urlencoded" \
+          -d "client_id=test-client" \
+          -d "client_secret=test-secret-12345" \
+          -d "grant_type=client_credentials" | jq -r '.access_token')
+        
+        if [ "$TEST_TOKEN" == "null" ] || [ -z "$TEST_TOKEN" ]; then
+          echo "Failed to obtain test client token"
+          exit 1
+        fi
+        
+        echo "✓ Keycloak configuration completed successfully"
+
+    - name: Run Integration Tests
+      env:
+        KEYCLOAK_URL: http://localhost:8080
+        KEYCLOAK_REALM: test-realm
+        KEYCLOAK_CLIENT_ID: test-client
+        KEYCLOAK_CLIENT_SECRET: test-secret-12345
+      run: |
+        echo "Running integration tests..."
+        go test -race -v -tags=integration -coverprofile=coverage-integration.txt ./...
+
+    - name: Upload Integration Coverage to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage-integration.txt
+        flags: integration
+        name: integration-tests
+
+  # Combined coverage report
+  coverage-report:
+    name: Coverage Report
+    needs: [unit-test, integration-test]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v5
+
+    - name: Coverage Summary
+      run: |
+        echo "✓ Unit tests completed"
+        echo "✓ Integration tests completed"
+        echo "Check Codecov for detailed coverage reports"
