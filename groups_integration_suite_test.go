@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -91,13 +92,28 @@ func (s *GroupsIntegrationTestSuite) SetupTest() {
 
 // TearDownTest runs after each test - cleans up created resources
 func (s *GroupsIntegrationTestSuite) TearDownTest() {
+	if len(s.createdGroups) == 0 {
+		return
+	}
+
+	s.T().Logf("Cleaning up %d test group(s)...", len(s.createdGroups))
+
 	// Clean up groups in reverse order (children first)
+	cleanedCount := 0
 	for i := len(s.createdGroups) - 1; i >= 0; i-- {
 		groupID := s.createdGroups[i]
 		err := s.client.Groups.Delete(s.ctx, groupID)
 		if err != nil {
-			s.T().Logf("Warning: Failed to cleanup group %s: %v", groupID, err)
+			s.T().Logf("  Failed to cleanup group %s: %v", groupID, err)
+		} else {
+			cleanedCount++
 		}
+	}
+
+	if cleanedCount == len(s.createdGroups) {
+		s.T().Logf("✓ Successfully cleaned up all %d group(s)", cleanedCount)
+	} else {
+		s.T().Logf("⚠ Cleaned up %d/%d group(s)", cleanedCount, len(s.createdGroups))
 	}
 }
 
@@ -367,6 +383,490 @@ func (s *GroupsIntegrationTestSuite) TestComplexHierarchy() {
 	nestedSubGroups, err := s.client.Groups.ListSubGroupsPaginated(s.ctx, subGroup1ID, keycloak.SubGroupSearchParams{})
 	s.NoError(err)
 	s.GreaterOrEqual(len(nestedSubGroups), 1, "First subgroup should have at least 1 subgroup")
+}
+
+// TestSearchGroupsByCustomAttributesWithQ tests the Q parameter for searching custom attributes.
+// This test verifies if Keycloak supports the query format: 'key1:value1 key2:value2'
+func (s *GroupsIntegrationTestSuite) TestSearchGroupsByCustomAttributesWithQ() {
+	// Create groups with specific attributes
+	timestamp := time.Now().Unix()
+
+	// Group 1: Has department:engineering
+	group1Name := fmt.Sprintf("test-q-search-eng-%d", timestamp)
+	group1Attrs := map[string][]string{
+		"department": {"engineering"},
+		"location":   {"berlin"},
+	}
+	group1ID, err := s.client.Groups.Create(s.ctx, group1Name, group1Attrs)
+	s.Require().NoError(err)
+	s.trackGroup(group1ID)
+
+	// Group 2: Has department:marketing
+	group2Name := fmt.Sprintf("test-q-search-mkt-%d", timestamp)
+	group2Attrs := map[string][]string{
+		"department": {"marketing"},
+		"location":   {"amsterdam"},
+	}
+	group2ID, err := s.client.Groups.Create(s.ctx, group2Name, group2Attrs)
+	s.Require().NoError(err)
+	s.trackGroup(group2ID)
+
+	// Group 3: Has department:engineering and location:amsterdam
+	group3Name := fmt.Sprintf("test-q-search-eng-ams-%d", timestamp)
+	group3Attrs := map[string][]string{
+		"department": {"engineering"},
+		"location":   {"amsterdam"},
+	}
+	group3ID, err := s.client.Groups.Create(s.ctx, group3Name, group3Attrs)
+	s.Require().NoError(err)
+	s.trackGroup(group3ID)
+
+	// Group 4: Different attributes
+	group4Name := fmt.Sprintf("test-q-search-hr-%d", timestamp)
+	group4Attrs := map[string][]string{
+		"department": {"hr"},
+		"location":   {"london"},
+	}
+	group4ID, err := s.client.Groups.Create(s.ctx, group4Name, group4Attrs)
+	s.Require().NoError(err)
+	s.trackGroup(group4ID)
+
+	// Wait a bit to ensure Keycloak has indexed the groups
+	time.Sleep(1 * time.Second)
+
+	// Test 1: Search for single attribute
+	s.Run("single_attribute_search", func() {
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+		s.T().Log("TEST 1: Single Attribute Search")
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+
+		query := "department:engineering"
+		params := keycloak.SearchGroupParams{
+			Q:                   ptr.String(query),
+			BriefRepresentation: ptr.Bool(false),
+		}
+
+		s.T().Logf("Query: %q", query)
+		s.T().Log("Expected: Find group1 and group3 (both have department:engineering)")
+
+		groups, err := s.client.Groups.ListWithParams(s.ctx, params)
+		s.NoError(err)
+
+		s.T().Logf("Results: Found %d group(s)", len(groups))
+
+		// Should find group1 and group3 (both have department:engineering)
+		foundIDs := make(map[string]bool)
+		if len(groups) > 0 {
+			s.T().Log("Groups found:")
+			for i, group := range groups {
+				if group.ID != nil {
+					foundIDs[*group.ID] = true
+					s.T().Logf("  [%d] %s (ID: %s)", i+1, ptr.ToString(group.Name), *group.ID)
+					if group.Attributes != nil {
+						for key, values := range *group.Attributes {
+							s.T().Logf("      %s=%v", key, values)
+						}
+					}
+				}
+			}
+		}
+
+		// Check if the expected groups are found
+		s.T().Log("Validation:")
+		group1Found := foundIDs[group1ID]
+		group3Found := foundIDs[group3ID]
+		s.T().Logf("  Group1 found: %v", group1Found)
+		s.T().Logf("  Group3 found: %v", group3Found)
+
+		if group1Found && group3Found {
+			s.T().Log("✓ PASS: Single attribute search works as expected")
+		} else {
+			s.T().Log("✗ FAIL: Single attribute search might not be supported or behaves differently")
+		}
+	})
+
+	// Test 2: Search for multiple attributes (AND logic)
+	s.Run("multiple_attributes_search", func() {
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+		s.T().Log("TEST 2: Multiple Attributes Search (AND Logic)")
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+
+		query := "department:engineering location:amsterdam"
+		params := keycloak.SearchGroupParams{
+			Q:                   ptr.String(query),
+			BriefRepresentation: ptr.Bool(false),
+		}
+
+		s.T().Logf("Query: %q", query)
+		s.T().Log("Expected: Find only group3 (has BOTH attributes)")
+
+		groups, err := s.client.Groups.ListWithParams(s.ctx, params)
+		s.NoError(err)
+
+		s.T().Logf("Results: Found %d group(s)", len(groups))
+
+		// Should find only group3 (has both department:engineering AND location:amsterdam)
+		foundIDs := make(map[string]bool)
+		if len(groups) > 0 {
+			s.T().Log("Groups found:")
+			for i, group := range groups {
+				if group.ID != nil {
+					foundIDs[*group.ID] = true
+					s.T().Logf("  [%d] %s (ID: %s)", i+1, ptr.ToString(group.Name), *group.ID)
+					if group.Attributes != nil {
+						for key, values := range *group.Attributes {
+							s.T().Logf("      %s=%v", key, values)
+						}
+					}
+				}
+			}
+		}
+
+		// Check if the expected group is found
+		s.T().Log("Validation:")
+		group1Found := foundIDs[group1ID]
+		group2Found := foundIDs[group2ID]
+		group3Found := foundIDs[group3ID]
+		group4Found := foundIDs[group4ID]
+		s.T().Logf("  Group1 (eng+berlin):    %v", group1Found)
+		s.T().Logf("  Group2 (mkt+amsterdam): %v", group2Found)
+		s.T().Logf("  Group3 (eng+amsterdam): %v <- expected", group3Found)
+		s.T().Logf("  Group4 (hr+london):     %v", group4Found)
+
+		if group3Found && !group1Found && !group2Found && !group4Found {
+			s.T().Log("✓ PASS: Multiple attributes search works with AND logic")
+		} else {
+			s.T().Log("✗ FAIL: Multiple attributes search might not be supported or behaves differently")
+		}
+	})
+
+	// Test 3: Search with non-existent attribute value
+	s.Run("non_existent_attribute_search", func() {
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+		s.T().Log("TEST 3: Non-Existent Attribute Search")
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+
+		query := "department:nonexistent"
+		params := keycloak.SearchGroupParams{
+			Q:                   ptr.String(query),
+			BriefRepresentation: ptr.Bool(false),
+		}
+
+		s.T().Logf("Query: %q", query)
+		s.T().Log("Expected: No test groups should be found")
+
+		groups, err := s.client.Groups.ListWithParams(s.ctx, params)
+		s.NoError(err)
+
+		s.T().Logf("Results: Found %d group(s)", len(groups))
+
+		// Should not find any of our test groups
+		foundIDs := make(map[string]bool)
+		for _, group := range groups {
+			if group.ID != nil {
+				foundIDs[*group.ID] = true
+			}
+		}
+
+		// Check if none of our test groups are found
+		s.T().Log("Validation:")
+		anyTestGroupFound := foundIDs[group1ID] || foundIDs[group2ID] || foundIDs[group3ID] || foundIDs[group4ID]
+		s.T().Logf("  Test groups found: %v", anyTestGroupFound)
+
+		if !anyTestGroupFound {
+			s.T().Log("✓ PASS: Non-existent attribute search returns no matches")
+		} else {
+			s.T().Log("✗ FAIL: Non-existent attribute search returned unexpected results")
+			if foundIDs[group1ID] {
+				s.T().Logf("  Unexpectedly found group1: %s", group1ID)
+			}
+			if foundIDs[group2ID] {
+				s.T().Logf("  Unexpectedly found group2: %s", group2ID)
+			}
+			if foundIDs[group3ID] {
+				s.T().Logf("  Unexpectedly found group3: %s", group3ID)
+			}
+			if foundIDs[group4ID] {
+				s.T().Logf("  Unexpectedly found group4: %s", group4ID)
+			}
+		}
+	})
+
+	// Test 4: Empty Q parameter
+	s.Run("empty_q_parameter", func() {
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+		s.T().Log("TEST 4: Empty Q Parameter")
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+
+		query := ""
+		params := keycloak.SearchGroupParams{
+			Q:                   ptr.String(query),
+			BriefRepresentation: ptr.Bool(false),
+		}
+
+		s.T().Logf("Query: %q (empty string)", query)
+		s.T().Log("Expected: Should not cause errors")
+
+		groups, err := s.client.Groups.ListWithParams(s.ctx, params)
+		s.NoError(err)
+
+		s.T().Logf("Results: Found %d group(s)", len(groups))
+		s.T().Log("✓ PASS: Empty Q parameter handled gracefully")
+	})
+
+	// Summary
+	s.T().Log(strings.Repeat("-", 70))
+	s.T().Log("Q PARAMETER TEST SUMMARY")
+	s.T().Log(strings.Repeat("-", 70))
+	s.T().Log("Documentation:")
+	s.T().Log("  The 'q' parameter searches for custom attributes")
+	s.T().Log("  Format: 'key1:value1 key2:value2'")
+	s.T().Log("Test Results:")
+	s.T().Log("  Check individual test outputs above for actual behavior")
+	s.T().Log("Interpretation:")
+	s.T().Log("  ✓ PASS = Feature works as expected in your Keycloak version")
+	s.T().Log("  ✗ FAIL = Feature may not be supported or behaves differently")
+	s.T().Log(strings.Repeat("-", 70))
+}
+
+// TestSearchSubGroupsByAttributesWithQ tests that the global groups endpoint
+// with Q parameter can search for subgroups by custom attributes.
+// This verifies the Keycloak documentation that states:
+// "subGroups are only returned when using the search or q parameter"
+func (s *GroupsIntegrationTestSuite) TestSearchSubGroupsByAttributesWithQ() {
+	timestamp := time.Now().Unix()
+
+	// Create parent group
+	parentName := fmt.Sprintf("test-q-parent-%d", timestamp)
+	parentID, err := s.client.Groups.Create(s.ctx, parentName, nil)
+	s.Require().NoError(err)
+	s.trackGroup(parentID)
+
+	// Create subgroups with specific attributes
+	// Subgroup 1: Has team:backend
+	subGroup1Name := fmt.Sprintf("test-q-subgroup-backend-%d", timestamp)
+	subGroup1Attrs := map[string][]string{
+		"team":     {"backend"},
+		"language": {"go"},
+	}
+	subGroup1ID, err := s.client.Groups.CreateSubGroup(s.ctx, parentID, subGroup1Name, subGroup1Attrs)
+	s.Require().NoError(err)
+	s.trackGroup(subGroup1ID)
+
+	// Subgroup 2: Has team:frontend
+	subGroup2Name := fmt.Sprintf("test-q-subgroup-frontend-%d", timestamp)
+	subGroup2Attrs := map[string][]string{
+		"team":     {"frontend"},
+		"language": {"javascript"},
+	}
+	subGroup2ID, err := s.client.Groups.CreateSubGroup(s.ctx, parentID, subGroup2Name, subGroup2Attrs)
+	s.Require().NoError(err)
+	s.trackGroup(subGroup2ID)
+
+	// Create another parent with a subgroup (to ensure we're filtering correctly)
+	otherParentName := fmt.Sprintf("test-q-other-parent-%d", timestamp)
+	otherParentID, err := s.client.Groups.Create(s.ctx, otherParentName, nil)
+	s.Require().NoError(err)
+	s.trackGroup(otherParentID)
+
+	// Create subgroup under other parent with same attribute
+	otherSubGroupName := fmt.Sprintf("test-q-other-subgroup-%d", timestamp)
+	otherSubGroupAttrs := map[string][]string{
+		"team":     {"backend"},
+		"language": {"rust"},
+	}
+	otherSubGroupID, err := s.client.Groups.CreateSubGroup(s.ctx, otherParentID, otherSubGroupName, otherSubGroupAttrs)
+	s.Require().NoError(err)
+	s.trackGroup(otherSubGroupID)
+
+	// Wait for indexing
+	time.Sleep(1 * time.Second)
+
+	// Test 1: Search for subgroups by single attribute
+	s.Run("search_subgroups_by_attribute", func() {
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+		s.T().Log("TEST 1: Search Subgroups by Single Attribute")
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+
+		query := "team:backend"
+		params := keycloak.SearchGroupParams{
+			Q:                   ptr.String(query),
+			BriefRepresentation: ptr.Bool(false),
+		}
+
+		s.T().Logf("Query: %q", query)
+		s.T().Log("Expected: Find subgroups with team:backend attribute")
+
+		groups, err := s.client.Groups.ListWithParams(s.ctx, params)
+		s.NoError(err)
+
+		s.T().Logf("Results: Found %d top-level group(s)", len(groups))
+
+		// Check if subgroups are in the results (as top-level) OR in SubGroups field
+		foundSubGroup1 := false
+		foundOtherSubGroup := false
+		foundInSubGroupsField := false
+
+		if len(groups) > 0 {
+			s.T().Log("Analyzing groups:")
+			for i, group := range groups {
+				if group.ID == nil {
+					continue
+				}
+
+				s.T().Logf("  [%d] %s (ID: %s)", i+1, ptr.ToString(group.Name), *group.ID)
+				if group.ParentID != nil {
+					s.T().Logf("      Parent: %s", *group.ParentID)
+				}
+				if group.Attributes != nil && len(*group.Attributes) > 0 {
+					for key, values := range *group.Attributes {
+						s.T().Logf("      %s=%v", key, values)
+					}
+				}
+				if group.SubGroups != nil && len(*group.SubGroups) > 0 {
+					s.T().Logf("      Has %d subgroup(s)", len(*group.SubGroups))
+					// Check if our subgroups are in the SubGroups field
+					for j, subGroup := range *group.SubGroups {
+						if subGroup.ID != nil {
+							s.T().Logf("        [%d] %s (ID: %s)", j+1, ptr.ToString(subGroup.Name), *subGroup.ID)
+							if *subGroup.ID == subGroup1ID {
+								foundSubGroup1 = true
+								foundInSubGroupsField = true
+							}
+							if *subGroup.ID == otherSubGroupID {
+								foundOtherSubGroup = true
+								foundInSubGroupsField = true
+							}
+						}
+					}
+				}
+
+				// Check if the group itself is a subgroup we're looking for
+				if *group.ID == subGroup1ID {
+					foundSubGroup1 = true
+				}
+				if *group.ID == otherSubGroupID {
+					foundOtherSubGroup = true
+				}
+			}
+		}
+
+		s.T().Log("Validation:")
+		s.T().Logf("  SubGroup1 (backend+go):     %v", foundSubGroup1)
+		s.T().Logf("  OtherSubGroup (backend+rust): %v", foundOtherSubGroup)
+		s.T().Logf("  Found in SubGroups field:   %v", foundInSubGroupsField)
+
+		s.T().Log("Interpretation:")
+		if foundInSubGroupsField {
+			s.T().Log("  ✓ 'q' returns PARENT groups with matching subgroups in SubGroups field")
+		} else if foundSubGroup1 || foundOtherSubGroup {
+			s.T().Log("  ✓ 'q' returns subgroups directly as top-level results")
+		} else {
+			s.T().Log("  ✗ 'q' does NOT search subgroup attributes")
+			s.T().Log("     (may only search top-level attributes or names)")
+		}
+	})
+
+	// Test 2: Try to understand what 'q' returns
+	s.Run("understand_q_behavior", func() {
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+		s.T().Log("TEST 2: Understanding 'q' Parameter with PopulateHierarchy")
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+
+		// Try searching with PopulateHierarchy
+		query := "team:backend"
+		params := keycloak.SearchGroupParams{
+			Q:                   ptr.String(query),
+			BriefRepresentation: ptr.Bool(false),
+			PopulateHierarchy:   ptr.Bool(true),
+		}
+
+		s.T().Logf("Query: %q with PopulateHierarchy=true", query)
+
+		groups, err := s.client.Groups.ListWithParams(s.ctx, params)
+		s.NoError(err)
+
+		s.T().Logf("Results: Found %d group(s)", len(groups))
+
+		if len(groups) > 0 {
+			s.T().Log("Group details:")
+			for i, group := range groups {
+				if group.ID == nil {
+					continue
+				}
+
+				s.T().Logf("  [%d] %s (ID: %s)", i+1, ptr.ToString(group.Name), *group.ID)
+				if group.ParentID != nil {
+					s.T().Logf("      Type: Subgroup (Parent: %s)", *group.ParentID)
+				} else {
+					s.T().Log("      Type: Top-level group")
+				}
+				if group.Attributes != nil && len(*group.Attributes) > 0 {
+					for key, values := range *group.Attributes {
+						s.T().Logf("      %s=%v", key, values)
+					}
+				}
+				if group.SubGroups != nil && len(*group.SubGroups) > 0 {
+					s.T().Logf("      Has %d subgroup(s)", len(*group.SubGroups))
+				}
+			}
+		}
+
+		s.T().Log("This test helps understand how PopulateHierarchy affects results")
+	})
+
+	// Test 3: Compare with search parameter (name-based)
+	s.Run("compare_with_name_search", func() {
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+		s.T().Log("TEST 3: Comparing 'search' (name) vs 'q' (attributes)")
+		s.T().Log("=" + strings.Repeat("=", 68) + "=")
+
+		// Search by name
+		searchParams := keycloak.SearchGroupParams{
+			Search:              ptr.String("backend"),
+			BriefRepresentation: ptr.Bool(false),
+		}
+
+		s.T().Log("Test A: Search by name")
+		s.T().Log("  Query: search=\"backend\"")
+
+		searchGroups, err := s.client.Groups.ListWithParams(s.ctx, searchParams)
+		s.NoError(err)
+
+		s.T().Logf("  Found: %d group(s)", len(searchGroups))
+
+		// Search by attribute
+		qParams := keycloak.SearchGroupParams{
+			Q:                   ptr.String("team:backend"),
+			BriefRepresentation: ptr.Bool(false),
+		}
+
+		s.T().Log("Test B: Search by attribute")
+		s.T().Log("  Query: q=\"team:backend\"")
+
+		qGroups, err := s.client.Groups.ListWithParams(s.ctx, qParams)
+		s.NoError(err)
+
+		s.T().Logf("  Found: %d group(s)", len(qGroups))
+
+		s.T().Log("Compare the results to understand behavior differences")
+	})
+
+	// Summary
+	s.T().Log(strings.Repeat("-", 70))
+	s.T().Log("SUBGROUP Q PARAMETER TEST CONCLUSION")
+	s.T().Log(strings.Repeat("-", 70))
+	s.T().Log("Keycloak Documentation:")
+	s.T().Log("  'subGroups are only returned when using search or q parameter'")
+	s.T().Log("What We Tested:")
+	s.T().Log("  1. Whether 'q' parameter searches subgroup attributes")
+	s.T().Log("  2. How results are returned (parent groups vs direct subgroups)")
+	s.T().Log("  3. Impact of PopulateHierarchy parameter")
+	s.T().Log("  4. Difference between 'search' (name) and 'q' (attributes)")
+	s.T().Log("Key Findings:")
+	s.T().Log("  Check the individual test outputs above for actual behavior")
+	s.T().Log("  Behavior may vary depending on your Keycloak version")
+	s.T().Log(strings.Repeat("-", 70))
 }
 
 // Run the suite

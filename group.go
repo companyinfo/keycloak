@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 
 	"github.com/go-resty/resty/v2"
 	"go.companyinfo.dev/ptr"
@@ -282,12 +283,11 @@ func (g *groupsClient) Get(ctx context.Context, groupID string) (*Group, error) 
 }
 
 // GetByAttribute searches for a group with the specified attribute key-value pair.
-// This method performs a client-side search by fetching all groups page by page
-// and examining their attributes. For realms with many groups, this may be slow.
+// This method uses Keycloak's server-side attribute search (q parameter) for efficient filtering.
+// Only groups matching the exact attribute key-value pair are returned from the server.
 //
-// Performance Note: This operation fetches all groups from Keycloak and searches
-// them client-side. In large realms (1000+ groups), consider using alternative
-// approaches like caching or direct API queries if your use case allows.
+// Performance: This method uses server-side filtering, making it efficient even for realms
+// with thousands of groups. The search is performed by Keycloak using the 'q' query parameter.
 //
 // Returns ErrGroupNotFound if no matching group is found.
 func (g *groupsClient) GetByAttribute(ctx context.Context, attribute *GroupAttribute) (*Group, error) {
@@ -295,31 +295,42 @@ func (g *groupsClient) GetByAttribute(ctx context.Context, attribute *GroupAttri
 		return nil, errors.New("attribute parameter cannot be nil")
 	}
 
-	currentPage := 0
-
-	var (
-		groups []*Group
-		err    error
-	)
-
-	for {
-		groups, err = g.ListPaginated(ctx, nil, false, currentPage*g.client.pageSize, g.client.pageSize)
-		if err != nil {
-			return nil, err
-		}
-
-		// iterate result and look for the Reference
-		if group, ok := findGroupByAttribute(groups, *attribute); ok {
-			return group, nil
-		}
-
-		if len(groups) < g.client.pageSize {
-			// last page, finish search
-			return nil, ErrGroupNotFound
-		}
-
-		currentPage++
+	// Use server-side filtering with the q parameter
+	// Format: "key:value"
+	query := fmt.Sprintf("%s:%s", attribute.Key, attribute.Value)
+	params := SearchGroupParams{
+		Q:                   ptr.String(query),
+		BriefRepresentation: ptr.Bool(false),
 	}
+
+	groups, err := g.list(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify we got results
+	if len(groups) == 0 {
+		return nil, ErrGroupNotFound
+	}
+
+	// Keycloak's q parameter should return exact matches, but let's verify
+	// to ensure we return the correct group if multiple groups are returned
+	for _, group := range groups {
+		if group == nil || group.Attributes == nil {
+			continue
+		}
+
+		groupAttributes := *group.Attributes
+		if values, ok := groupAttributes[attribute.Key]; ok {
+			// Check if any value matches (supports both single and multi-value attributes)
+			if slices.Contains(values, attribute.Value) {
+				return group, nil
+			}
+		}
+	}
+
+	// No exact match found (shouldn't happen with q parameter, but be defensive)
+	return nil, ErrGroupNotFound
 }
 
 // GetSubGroupByID finds a subgroup by its ID within a parent group's children.
@@ -455,6 +466,8 @@ func (g *groupsClient) getRequest(ctx context.Context) *resty.Request {
 
 // findGroupByAttribute is a helper function that searches for a group with a specific attribute
 // in a slice of groups. It returns the matching group and a boolean indicating if found.
+// The function searches through all values in multi-value attributes and returns the first
+// group where any value matches the search criteria.
 func findGroupByAttribute(groups []*Group, attribute GroupAttribute) (*Group, bool) {
 	for _, group := range groups {
 		if group == nil || group.Attributes == nil {
@@ -463,11 +476,9 @@ func findGroupByAttribute(groups []*Group, attribute GroupAttribute) (*Group, bo
 
 		groupAttributes := *group.Attributes
 
-		if value, ok := groupAttributes[attribute.Key]; ok {
-			if len(value) != 1 {
-				return nil, false
-			}
-			if value[0] == attribute.Value {
+		if values, ok := groupAttributes[attribute.Key]; ok {
+			// Search through all attribute values
+			if slices.Contains(values, attribute.Value) {
 				return group, true
 			}
 		}

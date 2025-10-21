@@ -121,7 +121,7 @@ func BenchmarkGroupsClient_Create(b *testing.B) {
 		pageSize: 50,
 		resty:    newTestRestyClient(),
 	}
-	client.resty.SetHostURL(serverURL)
+	client.resty.SetBaseURL(serverURL)
 	gc := &groupsClient{
 		client: client,
 	}
@@ -176,7 +176,7 @@ func BenchmarkGroupsClient_GetByAttribute(b *testing.B) {
 		pageSize: 50,
 		resty:    newTestRestyClient(),
 	}
-	client.resty.SetHostURL(serverURL)
+	client.resty.SetBaseURL(serverURL)
 	gc := &groupsClient{
 		client: client,
 	}

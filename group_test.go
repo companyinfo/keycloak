@@ -140,7 +140,7 @@ func TestFindGroupByAttribute(t *testing.T) {
 			wantFound: true,
 		},
 		{
-			name: "attribute with multiple values",
+			name: "attribute with multiple values - match first value",
 			groups: []*Group{
 				{
 					ID:   ptr.String("group-1"),
@@ -153,6 +153,54 @@ func TestFindGroupByAttribute(t *testing.T) {
 			attribute: GroupAttribute{
 				Key:   "customID",
 				Value: "12345",
+			},
+			wantGroup: &Group{
+				ID:   ptr.String("group-1"),
+				Name: ptr.String("Group 1"),
+				Attributes: &map[string][]string{
+					"customID": {"12345", "67890"},
+				},
+			},
+			wantFound: true,
+		},
+		{
+			name: "attribute with multiple values - match second value",
+			groups: []*Group{
+				{
+					ID:   ptr.String("group-1"),
+					Name: ptr.String("Group 1"),
+					Attributes: &map[string][]string{
+						"customID": {"12345", "67890"},
+					},
+				},
+			},
+			attribute: GroupAttribute{
+				Key:   "customID",
+				Value: "67890",
+			},
+			wantGroup: &Group{
+				ID:   ptr.String("group-1"),
+				Name: ptr.String("Group 1"),
+				Attributes: &map[string][]string{
+					"customID": {"12345", "67890"},
+				},
+			},
+			wantFound: true,
+		},
+		{
+			name: "attribute with multiple values - no match",
+			groups: []*Group{
+				{
+					ID:   ptr.String("group-1"),
+					Name: ptr.String("Group 1"),
+					Attributes: &map[string][]string{
+						"customID": {"12345", "67890"},
+					},
+				},
+			},
+			attribute: GroupAttribute{
+				Key:   "customID",
+				Value: "99999",
 			},
 			wantGroup: nil,
 			wantFound: false,
