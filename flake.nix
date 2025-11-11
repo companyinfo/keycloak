@@ -201,7 +201,11 @@
                   gum log --level error ".env file not found. Run 'nix run .#setup-keycloak' first."
                   exit 1
                 fi
+                # shellcheck disable=SC1091
+                # .env is generated dynamically by setup-keycloak.sh
                 set -a && . ./.env && set +a
+                # Export variables explicitly to ensure they're available to the test command
+                export KEYCLOAK_URL KEYCLOAK_REALM KEYCLOAK_CLIENT_ID KEYCLOAK_CLIENT_SECRET
                 if gum spin --show-output --spinner dot --title "Running integration tests..." -- \
                   go test -v -race -tags=integration -coverprofile=coverage-integration.out ./...; then
                   gum log --level info "Integration tests passed successfully"
@@ -305,7 +309,7 @@
                 fi
                 
                 if gum spin --show-output --spinner dot --title "Configuring Keycloak..." -- \
-                  NON_INTERACTIVE=true ./scripts/setup-keycloak.sh; then
+                  env NON_INTERACTIVE=true ./scripts/setup-keycloak.sh; then
                   gum log --level info "Keycloak configured successfully"
                 else
                   gum log --level error "Keycloak configuration failed"
@@ -354,7 +358,7 @@
                 fi
                 
                 gum log --level info "Configuring Keycloak..."
-                if ! NON_INTERACTIVE=true ./scripts/setup-keycloak.sh; then
+                if ! env NON_INTERACTIVE=true ./scripts/setup-keycloak.sh; then
                   gum log --level error "Keycloak configuration failed"
                   exit 1
                 fi
